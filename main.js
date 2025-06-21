@@ -13,7 +13,7 @@ import FractalFunctions from './fractal_functions.js'
 class Config {
   // Extended buffer size to accommodate new parameters
   // Must be a multiple of 16 bytes for WebGPU alignment requirements
-  buffer = new ArrayBuffer(64)
+  buffer = new ArrayBuffer(80)  // Increased from 64 to 80 bytes
 
   _origin = new Float32Array(this.buffer, 0, 2)
   get x()      { return this._origin[0] }
@@ -63,6 +63,11 @@ class Config {
   set satShift(value) { this._postProcess[2] = value }
   get lightShift()    { return this._postProcess[3] }
   set lightShift(value) { this._postProcess[3] = value }
+  
+  // Animation speed control
+  _animationSpeed = new Float32Array(this.buffer, 60, 1)
+  get animationSpeed()      { return this._animationSpeed[0] }
+  set animationSpeed(value) { this._animationSpeed[0] = value }
 }
 
 class StructWithFlexibleArrayElement {
@@ -151,7 +156,7 @@ const VARIATION_ID_TO_STR_ENTRIES = [
 const VARIATION_ID_TO_STR = new Map(VARIATION_ID_TO_STR_ENTRIES)
 const STR_TO_VARIATION_ID = new Map(VARIATION_ID_TO_STR_ENTRIES.map(([a, b]) => [b, a]))
 class XForm {
-  static SIZE = 32
+  static SIZE = 40  // Increased from 32 to accommodate animation data
   constructor(view) { this.view = view }
 
   get variation() {
@@ -182,6 +187,13 @@ class XForm {
   set d(value) { this.view.setFloat32(20, value, true) }
   set e(value) { this.view.setFloat32(24, value, true) }
   set f(value) { this.view.setFloat32(28, value, true) }
+  
+  // Animation properties
+  get animateX() { return this.view.getUint32(32, true) !== 0 }
+  set animateX(value) { this.view.setUint32(32, value ? 1 : 0, true) }
+  
+  get animateY() { return this.view.getUint32(36, true) !== 0 }
+  set animateY(value) { this.view.setUint32(36, value ? 1 : 0, true) }
 }
 
 class Fractal extends StructWithFlexibleArrayElement {
@@ -281,6 +293,7 @@ struct CanvasConfiguration {
   hueShift: f32,
   satShift: f32,
   lightShift: f32,
+  animationSpeed: f32,
 };
 
 // FIXME: Use a mat3x3
@@ -302,6 +315,8 @@ struct XForm {
   variation_id: u32,
   color: f32,
   transform: AffineTransform,
+  animateX: u32,
+  animateY: u32,
 };
 
 struct Fractal {
@@ -1102,7 +1117,7 @@ const init = async (canvas, starts_running = true) => {
   })
   const configBuffer = device.createBuffer({
     label: 'FLAM3 > Buffer > Configuration',
-    size: 64, // Must be a multiple of 16 bytes for WebGPU alignment requirements
+    size: 80, // Must be a multiple of 16 bytes for WebGPU alignment requirements
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
   })
   const cmapBuffer = device.createBuffer({
@@ -1229,6 +1244,7 @@ const init = async (canvas, starts_running = true) => {
   config.hueShift = 0
   config.satShift = 0
   config.lightShift = 0
+  config.animationSpeed = 1.0  // 100% speed by default
 
   const fractal = new Fractal
   //fractal.add({ variation: 'Sinusoidal', color: 0, a: 0.5, b:  0.0, c:  0.5, d:  0.0, e: 0.5, f:  0.5 })
@@ -1241,10 +1257,10 @@ const init = async (canvas, starts_running = true) => {
   //fractal.add({ variation: 'Eyefish', color: 0, a:  0.715673, b: -0.418864, c:  0.576108, d:  0.418864, e:  0.715673, f:  0.455125 })
   //fractal.add({ variation: 'Eyefish', color: 1, a: -0.212317, b:  0.536045, c:  0.53578,  d: -0.536045, e: -0.212317, f: -0.743179 })
   //fractal.add({ variation: 'Linear',  color: 1, a:  0.7,      b:  0.0,      c:  0.0,      d:  0.0,      e:  0.7,      f:  0.0      })
-  fractal.add({ variation: 'Linear', color: 0, a:  0.5, b: 0, c:    0, d: 0, e:  0.5, f: -0.5 })
-  fractal.add({ variation: 'Linear', color: 0, a:  0.5, b: 0, c: -0.5, d: 0, e:  0.5, f:  0.5 })
-  fractal.add({ variation: 'Sinusoidal', color: 1, a:  0.5, b: 0, c:  0.5, d: 0, e:  0.5, f:  0.5 })
-  fractal.add({ variation: 'Linear', color: 0, a: -2,   b: 0, c:    0, d: 0, e: -2,   f:    0 })
+  fractal.add({ variation: 'Linear', color: 0, a:  0.5, b: 0, c:    0, d: 0, e:  0.5, f: -0.5, animateX: false, animateY: false })
+  fractal.add({ variation: 'Linear', color: 0, a:  0.5, b: 0, c: -0.5, d: 0, e:  0.5, f:  0.5, animateX: false, animateY: false })
+  fractal.add({ variation: 'Sinusoidal', color: 1, a:  0.5, b: 0, c:  0.5, d: 0, e:  0.5, f:  0.5, animateX: false, animateY: false })
+  fractal.add({ variation: 'Linear', color: 0, a: -2,   b: 0, c:    0, d: 0, e: -2,   f:    0, animateX: false, animateY: false })
 
   const cmap = new CMap
 
@@ -1259,6 +1275,8 @@ const init = async (canvas, starts_running = true) => {
       elem.setAttribute('e', xform.e.toFixed(2))
       elem.setAttribute('f', xform.f.toFixed(2))
       elem.setAttribute('color', xform.color)
+      elem.setAttribute('animateX', xform.animateX)
+      elem.setAttribute('animateY', xform.animateY)
       elem.shadowRoot.querySelector('select').onchange = ev => {
         this.xform.variation = ev.currentTarget.value
         flam3.clear()
@@ -1267,15 +1285,34 @@ const init = async (canvas, starts_running = true) => {
         this.xform.color = Number.parseFloat(ev.currentTarget.value)
         flam3.clear()
       }
+      elem.shadowRoot.querySelector('input[name="animateX"]').onchange = ev => {
+        this.xform.animateX = ev.currentTarget.checked
+        flam3.clear()
+      }
+      elem.shadowRoot.querySelector('input[name="animateY"]').onchange = ev => {
+        this.xform.animateY = ev.currentTarget.checked
+        flam3.clear()
+      }
       elem.shadowRoot.querySelector('button').onclick = _ => {
         this.remove(fractal)
       }
+      
+      // Initialize animation checkboxes
+      elem.shadowRoot.querySelector('input[name="animateX"]').checked = xform.animateX
+      elem.shadowRoot.querySelector('input[name="animateY"]').checked = xform.animateY
+      
       xform_list.appendChild(elem)
       this.editor = elem
 
       this.xform = xform
       this.current_drag_data = undefined
       this.currently_dragging = undefined
+      
+      // Store original positions for animation
+      this.original_a = xform.a
+      this.original_b = xform.b
+      this.original_d = xform.d
+      this.original_e = xform.e
     }
 
     pointer_down(point) {
@@ -1441,6 +1478,38 @@ const init = async (canvas, starts_running = true) => {
       gui.splice(gui.findIndex(v => v === this), 1)
       flam3.clear()
     }
+
+    // Animation update method
+    updateAnimation(frame) {
+      const baseAnimationSpeed = 0.02 // Base speed of rotation
+      const time = frame * baseAnimationSpeed * config.animationSpeed
+      
+      if (this.xform.animateX) {
+        // Rotate X vector around origin
+        const radius = Math.sqrt(this.original_a * this.original_a + this.original_d * this.original_d)
+        const angle = Math.atan2(this.original_d, this.original_a) + time
+        this.a = radius * Math.cos(angle)
+        this.d = radius * Math.sin(angle)
+      }
+      
+      if (this.xform.animateY) {
+        // Rotate Y vector around origin
+        const radius = Math.sqrt(this.original_b * this.original_b + this.original_e * this.original_e)
+        const angle = Math.atan2(this.original_e, this.original_b) + time
+        this.b = radius * Math.cos(angle)
+        this.e = radius * Math.sin(angle)
+      }
+    }
+
+    set animateX(value) {
+      this.xform.animateX = value
+      this.editor.setAttribute('animateX', value)
+    }
+
+    set animateY(value) {
+      this.xform.animateY = value
+      this.editor.setAttribute('animateY', value)
+    }
   }
 
   const xform_list = document.getElementById('xforms')
@@ -1448,7 +1517,13 @@ const init = async (canvas, starts_running = true) => {
   for (let i = 0; i < fractal.length; i++)
     gui.push(new XFormEditor(fractal[i], xform_list))
   document.getElementById('add-xform').onclick = () => {
-    const xform = fractal.add({ variation: 'Linear', color: 0, a: 1, b: 0, c: 0, d: 0, e: 1, f: 0 })
+    const xform = fractal.add({ 
+      variation: 'Linear', 
+      color: 0, 
+      a: 1, b: 0, c: 0, d: 0, e: 1, f: 0,
+      animateX: false,
+      animateY: false
+    })
     gui.splice(0, 0, new XFormEditor(xform, xform_list))
   }
 
@@ -1470,6 +1545,15 @@ const init = async (canvas, starts_running = true) => {
       should_clear_histogram = false
     }
     ++config.frame
+    
+    // Update animations for all XForm editors
+    for (let i = 0; i < gui.length; i++) {
+      const editor = gui[i]
+      if (editor.updateAnimation) {
+        editor.updateAnimation(config.frame)
+      }
+    }
+    
     device.queue.writeBuffer(configBuffer,  0, config.buffer,  0)
     device.queue.writeBuffer(fractalBuffer, 0, fractal.buffer, 0)
 
@@ -1721,6 +1805,12 @@ const init = async (canvas, starts_running = true) => {
         lightShiftRange.value = config.lightShift;
         lightShiftValue.value = config.lightShift;
       }
+      
+      // Update animation speed dropdown
+      const animationSpeedSelect = document.getElementById('flam3-animation-speed');
+      if (animationSpeedSelect) {
+        animationSpeedSelect.value = config.animationSpeed.toFixed(2);
+      }
     } catch (error) {
       console.log("Error updating UI control values:", error);
     }
@@ -1771,6 +1861,7 @@ const init = async (canvas, starts_running = true) => {
   config.rotation = 1;
   config.mirrorX = false;
   config.mirrorY = false;
+  config.animationSpeed = 1.0;
 
   // BEGIN UI
   canvas.onwheel = ev => {
@@ -1849,6 +1940,16 @@ window.document.body.onload = async () => {
   cmap_selection.value = 'gnuplot'
   cmap_selection.onchange = ev => {
     window.flam3.cmap = ev.currentTarget.value
+  }
+  
+  // Animation speed control
+  const animationSpeedSelect = document.getElementById('flam3-animation-speed');
+  if (animationSpeedSelect) {
+    animationSpeedSelect.onchange = ev => {
+      const speed = parseFloat(ev.currentTarget.value);
+      window.flam3.config.animationSpeed = speed;
+      window.flam3.updateParams();
+    };
   }
   
   // Set up event handlers for the new UI controls
