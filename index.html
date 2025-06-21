@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>FLAM3 on WebGPU</title>
+        <script type="module" src="main.js">
+        </script>
+        <meta http-equiv="origin-trial" content="ApM25sNacnr2j5CSBQo9nFS9kwa4f6QxnNz9RQJF9B2IhcsSvH/VDUM64WbQY4uAGpoXxU35Xi9G4KKmFmxaQQ4AAABUeyJvcmlnaW4iOiJodHRwczovL2lnbG9zaWdnaW8uZ2l0aHViLmlvOjQ0MyIsImZlYXR1cmUiOiJXZWJHUFUiLCJleHBpcnkiOjE2OTE3MTE5OTl9">
+        <style>
+            body {
+                font-family: sans-serif;
+                margin: 0;
+                background-color: rgb(255, 255, 255);
+            }
+            .intro {
+                margin: auto;
+                max-width: 700px;
+            }
+            .intro h1, .intro h2, .intro h3 {
+                text-align: right;
+                line-height: 0.5em;
+            }
+            main {
+                width: 100%;
+                text-align: center;
+                background-color: rgb(72, 61, 139);
+            }
+            #fractal-viewer, #xforms {
+                display: inline-block;
+                vertical-align: middle;
+                margin-top: 0.4em;
+                margin-bottom: 0.4em;
+            }
+            #controls {
+                text-align: center;
+            }
+            #xforms {
+                background-color: rgb(166, 152, 252);
+                border-radius: 0px 10px 30px 10px;
+            }
+            xform-editor, #add-xform {
+                text-align: left;
+                display: block;
+                padding: 1em 1em;
+
+                border-color: rgb(72, 61, 139);
+                border-style: dashed;
+                border-width: 0.0em 0em 0.01em 0em;
+            }
+            xform-editor:last-child {
+                border-width: 0em;
+            }
+            #add-xform {
+                border-radius: 0px 10px 0px 0px;
+                text-align: center;
+                width: 100%;
+                background-color: transparent;
+            }
+            #add-xform:hover {
+                background-color: rgba(255, 255, 255, 0.25);
+            }
+            #add-xform:active {
+                background-color: rgba(255, 255, 255, 0.5);
+            }
+            #flam3-export {
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                padding: 5px 10px;
+                border-radius: 3px;
+                cursor: pointer;
+            }
+            #flam3-export:hover {
+                background-color: #45a049;
+            }
+        </style>
+    </head>
+    <body>
+        <template id="xform-editor-template">
+            <style>
+                .editor-element {
+                    display: block;
+                    margin-top: 0.2em;
+                }
+                .vector {
+                    vertical-align: middle;
+                    display: inline-block;
+                    border-color: black;
+                    border-style: solid;
+                    border-width: 0em 0.01em 0em 0.01em;
+                    border-radius: 0.3em;
+                }
+                .affine-transform {
+                    min-width: 200px;
+                }
+                .vector td {
+                    text-align: right;
+                }
+                .remove-button {
+                    text-align: center;
+                }
+            </style>
+            <label class="editor-element">
+                <i>Variation:</i>
+                <select name="variation-selector">
+                </select>
+            </label>
+            <label class="editor-element">
+                <i>Color:</i>
+                <input type="range" name="color" id="price" min="0" max="1" step="0.0001" value="0">
+            </label>
+            <div class="affine-transform editor-element">
+                <table class="vector">
+                    <tr>
+                        <td><slot name="a">a</slot></td>
+                        <td><slot name="b">b</slot></td>
+                    </tr>
+                    <tr>
+                        <td><slot name="d">d</slot></td>
+                        <td><slot name="e">e</slot></td>
+                    </tr>
+                </table>
+                <table class="vector">
+                    <tr><td>x</td></tr>
+                    <tr><td>y</td></tr>
+                </table>
+                 +
+                <table class="vector">
+                    <tr><td><slot name="c">c</slot></td></tr>
+                    <tr><td><slot name="f">f</slot></td></tr>
+                </table>
+            </div>
+            <div class="editor-element remove-button">
+                <button>Remove</button>
+            </div>
+        </template>
+        <main>
+            <h1 id="webgpu-not-supported-error" style="display: none;">WebGPU support was not detected</h1>
+            <h1 id="webgpu-no-device-error" style="display: none;">No WebGPU device is available</h1>
+            <div id="fractal-viewer">
+                <canvas id="output" width="900" height="900">
+                    Sorry, your browser has no canvas support
+                </canvas>
+                <div id="controls">
+                    <button onclick="flam3.start()"          id="flam3-start">Start     </button>
+                    <button onclick="flam3.stop()"           id="flam3-stop" >Stop      </button>
+                    <button onclick="flam3.step()"           id="flam3-step" >Step      </button>
+                    <button onclick="flam3.clear()"          id="flam3-clear">Clear     </button>
+                    <button onclick="flam3.gui = !flam3.gui" id="flam3-gui"  >Toggle GUI</button>
+                    <button id="flam3-random">Randomize</button>
+                    <button onclick="flam3.exportPNG()"      id="flam3-export">Export PNG</button>
+                    <select id="flam3-cmap">
+                    </select>
+                    <div id="renderingbar"></div>
+                </div>
+                
+                <div id="advanced-controls" style="margin-top: 10px; text-align: left; padding: 10px; background-color: #eee; border-radius: 5px;">
+                    <details>
+                        <summary style="font-weight: bold; cursor: pointer;">Advanced Controls</summary>
+                        <div style="margin-top: 10px;">
+                            <div style="margin-bottom: 10px;">
+                                <label for="final-xform">Final Transform:</label>
+                                <select id="final-xform">
+                                    <option value="-1">None</option>
+                                </select>
+                                <label for="cfinal-xform">Color Final:</label>
+                                <select id="cfinal-xform">
+                                    <option value="-1">None</option>
+                                </select>
+                            </div>
+                            
+                            <div style="margin-bottom: 10px;">
+                                <label for="rotation-value">Rotation:</label>
+                                <input type="range" id="rotation-range" min="1" max="20" step="1" value="1" style="width: 150px;">
+                                <input type="number" id="rotation-value" min="1" max="20" step="1" value="1" style="width: 50px;">
+                            </div>
+                            
+                            <div style="margin-bottom: 10px;">
+                                <label><input type="checkbox" id="mirror-x"> Mirror X</label>
+                                <label style="margin-left: 20px;"><input type="checkbox" id="mirror-y"> Mirror Y</label>
+                            </div>
+                            
+                            <div style="margin-bottom: 10px;">
+                                <label for="gamma-value">Gamma:</label>
+                                <input type="range" id="gamma-range" min="0.1" max="5" step="0.1" value="2.2" style="width: 150px;">
+                                <input type="number" id="gamma-value" min="0.1" max="5" step="0.1" value="2.2" style="width: 50px;">
+                            </div>
+                            
+                            <div style="margin-bottom: 10px;">
+                                <label for="hue-shift-value">Hue Shift:</label>
+                                <input type="range" id="hue-shift-range" min="-1" max="1" step="0.01" value="0" style="width: 150px;">
+                                <input type="number" id="hue-shift-value" min="-1" max="1" step="0.01" value="0" style="width: 50px;">
+                            </div>
+                            
+                            <div style="margin-bottom: 10px;">
+                                <label for="sat-shift-value">Saturation:</label>
+                                <input type="range" id="sat-shift-range" min="-1" max="1" step="0.01" value="0" style="width: 150px;">
+                                <input type="number" id="sat-shift-value" min="-1" max="1" step="0.01" value="0" style="width: 50px;">
+                            </div>
+                            
+                            <div style="margin-bottom: 10px;">
+                                <label for="light-shift-value">Lightness:</label>
+                                <input type="range" id="light-shift-range" min="-1" max="1" step="0.01" value="0" style="width: 150px;">
+                                <input type="number" id="light-shift-value" min="-1" max="1" step="0.01" value="0" style="width: 50px;">
+                            </div>
+                        </div>
+                    </details>
+                </div>
+            </div>
+            <div id="xforms">
+                <button id="add-xform">Add XForm</button>
+            </div>
+        </main>
+        <script type="text/javascript">
+            customElements.define('xform-editor', class extends HTMLElement {
+                static get observedAttributes() {
+                    return ['variation', 'color', 'a', 'b', 'c', 'd', 'e', 'f']
+                }
+                constructor() {
+                    super();
+                    const template = document.getElementById('xform-editor-template')
+                                             .content;
+                    this.attachShadow({mode: 'open'})
+                        .appendChild(template.cloneNode(true));
+                }
+                attributeChangedCallback(name, oldValue, newValue) {
+                    if (this.constructor.observedAttributes.includes(name))
+                        if (name === 'variation')
+                            this.shadowRoot.querySelector('select').value = newValue
+                        else if (name === 'color')
+                            this.shadowRoot.querySelector('input[name="color"]').value = newValue
+                        else
+                            this.shadowRoot.querySelector(`slot[name="${name}"]`).textContent = newValue
+                    else
+                        console.warn(`Unknown attribute ${name} changed from ${oldValue} to ${newValue}`)
+                }
+            });
+        </script>
+    </body>
+</html>
