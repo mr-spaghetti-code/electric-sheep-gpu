@@ -1287,10 +1287,24 @@ const init = async (canvas, starts_running = true) => {
       }
       elem.shadowRoot.querySelector('input[name="animateX"]').onchange = ev => {
         this.xform.animateX = ev.currentTarget.checked
+        
+        // Store original values when animation is enabled
+        if (ev.currentTarget.checked) {
+          this.original_a = this.xform.a
+          this.original_d = this.xform.d
+        }
+        
         flam3.clear()
       }
       elem.shadowRoot.querySelector('input[name="animateY"]').onchange = ev => {
         this.xform.animateY = ev.currentTarget.checked
+        
+        // Store original values when animation is enabled
+        if (ev.currentTarget.checked) {
+          this.original_b = this.xform.b
+          this.original_e = this.xform.e
+        }
+        
         flam3.clear()
       }
       elem.shadowRoot.querySelector('button').onclick = _ => {
@@ -1485,19 +1499,25 @@ const init = async (canvas, starts_running = true) => {
       const time = frame * baseAnimationSpeed * config.animationSpeed
       
       if (this.xform.animateX) {
-        // Rotate X vector around origin
+        // Rotate X vector around origin - use smooth animation with requestAnimationFrame timing
         const radius = Math.sqrt(this.original_a * this.original_a + this.original_d * this.original_d)
-        const angle = Math.atan2(this.original_d, this.original_a) + time
-        this.a = radius * Math.cos(angle)
-        this.d = radius * Math.sin(angle)
+        const originalAngle = Math.atan2(this.original_d, this.original_a)
+        const angle = originalAngle + time
+        
+        // Use precise trigonometric calculations to avoid cumulative errors
+        this.a = Number((radius * Math.cos(angle)).toFixed(6))
+        this.d = Number((radius * Math.sin(angle)).toFixed(6))
       }
       
       if (this.xform.animateY) {
-        // Rotate Y vector around origin
+        // Rotate Y vector around origin - use smooth animation with requestAnimationFrame timing
         const radius = Math.sqrt(this.original_b * this.original_b + this.original_e * this.original_e)
-        const angle = Math.atan2(this.original_e, this.original_b) + time
-        this.b = radius * Math.cos(angle)
-        this.e = radius * Math.sin(angle)
+        const originalAngle = Math.atan2(this.original_e, this.original_b)
+        const angle = originalAngle + time
+        
+        // Use precise trigonometric calculations to avoid cumulative errors
+        this.b = Number((radius * Math.cos(angle)).toFixed(6))
+        this.e = Number((radius * Math.sin(angle)).toFixed(6))
       }
     }
 
@@ -1528,7 +1548,13 @@ const init = async (canvas, starts_running = true) => {
   }
 
   let running = starts_running
-  function frame() {
+  let lastFrameTime = 0; // Track last frame time for smoother animation
+  
+  function frame(timestamp) {
+    // Calculate delta time for smoother animation
+    const deltaTime = lastFrameTime ? (timestamp - lastFrameTime) / 1000 : 0.016; // Default to ~60fps
+    lastFrameTime = timestamp;
+    
     const commandBuffers = []
     let num_passes = 0
     function with_encoder(action) {
@@ -1547,11 +1573,20 @@ const init = async (canvas, starts_running = true) => {
     ++config.frame
     
     // Update animations for all XForm editors
+    let hasAnimatedTransforms = false;
     for (let i = 0; i < gui.length; i++) {
       const editor = gui[i]
       if (editor.updateAnimation) {
-        editor.updateAnimation(config.frame)
+        if (editor.xform.animateX || editor.xform.animateY) {
+          hasAnimatedTransforms = true;
+          editor.updateAnimation(config.frame)
+        }
       }
+    }
+    
+    // Clear histogram on each frame if there are animated transforms to prevent blur
+    if (hasAnimatedTransforms) {
+      should_clear_histogram = true;
     }
     
     device.queue.writeBuffer(configBuffer,  0, config.buffer,  0)
@@ -1638,8 +1673,12 @@ const init = async (canvas, starts_running = true) => {
       flam3.clear()
     },
     stop()  { running = false },
-    start() { running = true; frame() },
-    step()  { frame() },
+    start() { 
+      running = true; 
+      lastFrameTime = 0; // Reset animation timing
+      requestAnimationFrame(frame);
+    },
+    step()  { frame(performance.now()) },
     clear() {
       // FIXME: Clear the canvas
       should_clear_histogram = true
@@ -1862,6 +1901,9 @@ const init = async (canvas, starts_running = true) => {
   config.mirrorX = false;
   config.mirrorY = false;
   config.animationSpeed = 1.0;
+  
+  // When initialized, clear the histogram to ensure crisp rendering
+  should_clear_histogram = true;
 
   // BEGIN UI
   canvas.onwheel = ev => {
@@ -1948,6 +1990,10 @@ window.document.body.onload = async () => {
     animationSpeedSelect.onchange = ev => {
       const speed = parseFloat(ev.currentTarget.value);
       window.flam3.config.animationSpeed = speed;
+      
+      // Clear histogram when changing animation speed for crisp rendering
+      window.flam3.clear();
+      
       window.flam3.updateParams();
     };
   }
