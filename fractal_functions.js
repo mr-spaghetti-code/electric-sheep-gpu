@@ -3,11 +3,13 @@
 
 class FractalFunctions {
   constructor() {
+    // Only include variations that are supported in main.js
     this.varisNames = [
       'Linear', 'Sinusoidal', 'Spherical', 'Swirl', 'Horseshoe', 'Polar',
       'Handkerchief', 'Heart', 'Disc', 'Spiral', 'Hyperbolic', 'Diamond', 'Ex',
-      'Julia', 'JuliaN', 'Bent', 'Waves', 'Fisheye', 'Popcorn', 'Power', 'Rings', 'Fan',
-      'Eyefish', 'Bubble', 'Cylinder', 'Tangent', 'Cross', 'Noise', 'Blur', 'Square'
+      'Julia', 'Bent', 'Fisheye', 'Exponential', 'Power', 'Cosine',
+      'Eyefish', 'Bubble', 'Cylinder', 'Noise', 'Blur', 'Gaussian', 'Arch',
+      'Tangent', 'Square', 'Rays', 'Blade', 'Secant', 'Twintrian', 'Cross'
     ];
     
     // Maps our variation names to the variation IDs in main.js
@@ -18,7 +20,7 @@ class FractalFunctions {
       'Swirl': 3,
       'Horseshoe': 4,
       'Polar': 5,
-      'Handkerchief': 6, // Named Hankerchief in fractal_example.js
+      'Handkerchief': 6,
       'Heart': 7,
       'Disc': 8,
       'Spiral': 9,
@@ -28,16 +30,22 @@ class FractalFunctions {
       'Julia': 13,
       'Bent': 14,
       'Fisheye': 16,
-      'Popcorn': 18, // Using Exponential slot in main.js
+      'Exponential': 18,
       'Power': 19,
-      'Rings': 20, // Using Cosine slot in main.js
-      'Fan': 27, // Using Eyefish slot in main.js
+      'Cosine': 20,
       'Eyefish': 27,
       'Bubble': 28,
       'Cylinder': 29,
       'Noise': 31,
       'Blur': 34,
+      'Gaussian': 35,
+      'Arch': 41,
+      'Tangent': 42,
       'Square': 43,
+      'Rays': 44,
+      'Blade': 45,
+      'Secant': 46,
+      'Twintrian': 47,
       'Cross': 48
     };
     
@@ -72,8 +80,8 @@ class FractalFunctions {
     } else { //Randomize
       if (funcsJSON) funcsJSON.shift(); //remove first element
 
-      //2 to 20 functions
-      const numOfFuncs = Math.max(Math.floor(Math.random() * 21), 2);
+      //3 to 6 functions
+      const numOfFuncs = Math.floor(Math.random() * 4) + 3; // Random number between 3 and 6
 
       for (let i = 0; i < numOfFuncs; i++) {
         const v = []; //array of ascending varis indices
@@ -181,7 +189,9 @@ class FractalFunctions {
         c: func.c[2], // x translate
         d: func.c[3], // x shear
         e: func.c[4], // y scale
-        f: func.c[5]  // y translate
+        f: func.c[5], // y translate
+        animateX: false, // No animation by default
+        animateY: false  // No animation by default
       });
     }
     
