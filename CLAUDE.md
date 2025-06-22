@@ -4,42 +4,76 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Electric Sheep GPU is a WebGPU implementation of Fractal Flame rendering. The application generates visually striking fractal artwork in real-time using GPU acceleration. It implements the "chaos game" algorithm and provides an interactive interface for manipulating fractal parameters.
+Electric Sheep GPU is a WebGPU implementation of Fractal Flame rendering with a React-based interface. The application generates visually striking fractal artwork in real-time using GPU acceleration through the WebGPU API.
 
 ## Architecture
 
-The project consists of the following key components:
+The project has evolved from a pure JavaScript implementation to a modern React application:
 
-- **Core Rendering Engine**: Implemented in `main.js`, uses WebGPU for GPU-accelerated fractal computation
-- **Fractal Functions**: Defined in `fractal_functions.js`, provides various mathematical transformations for the fractals
-- **Color System**: Uses color maps defined in `colourmaps.js` which can be generated using `gen-colourmaps.js`
-- **UI Components**: HTML/CSS components for user interaction, including transform editors and controls
+### Core Components
+- **WebGPU Rendering Engine**: `/electric-sheep/public/main.js` - Handles GPU-accelerated fractal computation using WebGPU compute shaders
+- **Fractal Mathematics**: `/electric-sheep/public/fractal_functions.js` - Implements weighted variation system with transformations like Linear, Sinusoidal, Spherical, etc.
+- **Color System**: `/electric-sheep/public/colourmaps.js` - Pre-defined color palettes for fractal rendering
+- **React UI**: `/electric-sheep/src/components/FractalViewer.tsx` - Main component integrating WebGPU with React controls
 
-## Key Technologies
+### Tech Stack
+- **Frontend**: React 19.1.0 + TypeScript
+- **Build Tool**: Vite 6.3.5
+- **UI Components**: Radix UI primitives (shadcn/ui pattern)
+- **Styling**: Tailwind CSS v4
+- **GPU**: WebGPU API with WGSL shaders
 
-- WebGPU for GPU-accelerated rendering and computation
-- WGSL (WebGPU Shading Language) for custom shader programs
-- JavaScript for UI and control logic
-- HTML5 Canvas for display
+## Development Commands
 
-## Running the Application
+Navigate to the React app directory first:
+```bash
+cd electric-sheep
+```
 
-Since this is a WebGPU application:
+### Install Dependencies
+```bash
+npm install
+```
 
-1. Open `index.html` in a WebGPU-compatible browser (Chrome with WebGPU flag enabled, or other browsers with WebGPU support)
-2. Use the interface to modify fractal parameters, change color maps, and export results
+### Run Development Server
+```bash
+npm run dev
+```
 
-## Project Specific Notes
+### Build for Production
+```bash
+npm run build
+```
 
-- The application implements multiple fractal variations like Linear, Sinusoidal, Spherical, etc.
-- Users can create complex fractal patterns by combining multiple transformations
-- Advanced controls allow for fine-tuning parameters like rotation, mirroring, gamma, and color shifts
-- Rendering is performed in real-time using WebGPU compute shaders
+### Preview Production Build
+```bash
+npm run preview
+```
 
-## File Structure
+### Type Checking
+```bash
+npm run typecheck
+```
 
-- `index.html`: Main entry point with UI elements and WebGPU canvas
-- `main.js`: Core WebGPU implementation and rendering pipeline
-- `fractal_functions.js`: Implements the weighted variation system for fractal generation
-- `colourmaps.js`: Contains color palettes for rendering
-- `gen-colourmaps.js`: Script to generate new color maps from input files
+## Project Structure
+
+```
+/electric-sheep/               # React application directory
+  /public/                     # Static assets and WebGPU implementation
+    main.js                    # Core WebGPU rendering engine
+    fractal_functions.js       # Fractal transformation functions
+    colourmaps.js             # Color palette definitions
+  /src/
+    /components/              # React components
+      FractalViewer.tsx       # Main fractal viewer component
+      ui/                     # Reusable UI components (shadcn/ui)
+    main.tsx                  # React app entry point
+```
+
+## Key Implementation Details
+
+- The WebGPU implementation uses compute shaders written in WGSL for parallel fractal point calculation
+- The "chaos game" algorithm is implemented to generate fractal patterns
+- Real-time parameter updates are handled through React state management
+- The UI provides controls for transforms, color maps, post-processing effects, and animation
+- Browser must support WebGPU (Chrome 113+, Edge 113+, or browsers with WebGPU flags enabled)
