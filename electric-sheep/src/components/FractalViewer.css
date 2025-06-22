@@ -1,0 +1,103 @@
+.fractal-viewer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background-color: black;
+  padding: 1rem;
+  min-height: 100vh;
+}
+
+.fractal-loading {
+  color: white;
+  font-size: 1.5rem;
+  margin: 2rem;
+}
+
+.fractal-error {
+  color: #ff6b6b;
+  font-size: 1.2rem;
+  margin: 2rem;
+  text-align: center;
+}
+
+.fractal-canvas {
+  border: 2px solid #333;
+  margin-bottom: 1rem;
+}
+
+.fractal-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+  margin-bottom: 1rem;
+}
+
+.fractal-controls button {
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.3s;
+}
+
+.fractal-controls button:hover:not(:disabled) {
+  background-color: #45a049;
+}
+
+.fractal-controls button:disabled {
+  background-color: #666;
+  cursor: not-allowed;
+}
+
+.fractal-controls select {
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.fractal-controls select:hover {
+  background-color: #45a049;
+}
+
+.fractal-xforms {
+  background-color: rgb(60, 60, 60);
+  border-radius: 0px 10px 30px 10px;
+  color: white;
+  padding: 1rem;
+  min-width: 300px;
+}
+
+#add-xform {
+  width: 100%;
+  background-color: transparent;
+  color: white;
+  border: 2px dashed rgb(40, 40, 40);
+  padding: 1rem;
+  text-align: center;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+#add-xform:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Style for XForm editors */
+xform-editor {
+  display: block;
+  padding: 1rem;
+  border-bottom: 1px dashed rgb(40, 40, 40);
+  color: white;
+}
+
+xform-editor:last-child {
+  border-bottom: none;
+}
