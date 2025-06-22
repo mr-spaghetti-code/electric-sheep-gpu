@@ -181,6 +181,34 @@ class FractalFunctions {
       const variationId = this.varisToVariationId[variationName] || 0; // Default to Linear if not found
       
       // Calculate affine transform parameters from coefficients
+      // Randomly set animation flags
+      // Ensure at least one transform is animated, but not too many (max 2-3)
+      const currentAnimatedCount = fractal.length > 0 ? 
+        Array.from({length: i}, (_, idx) => fractal[idx])
+          .filter(xf => xf.animateX || xf.animateY).length : 0;
+      
+      // Force animation on the first transform if none are animated yet
+      const isLastTransform = i === this.funcs.length - 1;
+      const needsAnimation = isLastTransform && currentAnimatedCount === 0;
+      
+      let shouldAnimateX = false;
+      let shouldAnimateY = false;
+      
+      if (needsAnimation) {
+        // Ensure at least one animation on the last transform if none exist
+        if (Math.random() < 0.5) {
+          shouldAnimateX = true;
+          shouldAnimateY = Math.random() < 0.3; // 30% chance for both
+        } else {
+          shouldAnimateY = true;
+          shouldAnimateX = Math.random() < 0.3; // 30% chance for both
+        }
+      } else if (currentAnimatedCount < 2) {
+        // Random chance for animation if we haven't hit the limit
+        shouldAnimateX = Math.random() < 0.25; // 25% chance
+        shouldAnimateY = Math.random() < 0.25; // 25% chance
+      }
+      
       fractal.add({
         variation: variationName,
         color: colorValue,
@@ -190,8 +218,8 @@ class FractalFunctions {
         d: func.c[3], // x shear
         e: func.c[4], // y scale
         f: func.c[5], // y translate
-        animateX: false, // No animation by default
-        animateY: false  // No animation by default
+        animateX: shouldAnimateX,
+        animateY: shouldAnimateY
       });
     }
     

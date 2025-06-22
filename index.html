@@ -89,7 +89,7 @@
             }
             
             /* Animation speed dropdown styling */
-            #flam3-animation-speed {
+            #flam3-animation-speed, #flam3-zoom-level {
                 background-color: #4CAF50;
                 color: white;
                 border: none;
@@ -99,7 +99,7 @@
                 margin: 2px;
             }
             
-            #flam3-animation-speed:hover {
+            #flam3-animation-speed:hover, #flam3-zoom-level:hover {
                 background-color: #45a049;
             }
             
@@ -222,6 +222,7 @@
                     <button onclick="flam3.clear()"          id="flam3-clear">Clear     </button>
                     <button onclick="flam3.gui = !flam3.gui" id="flam3-gui"  >Toggle GUI</button>
                     <button id="flam3-random">Randomize</button>
+                    <button id="flam3-clear-animations">Clear Animations</button>
                     <button onclick="flam3.exportPNG()"      id="flam3-export">Export PNG</button>
                     <select id="flam3-cmap">
                     </select>
@@ -230,6 +231,15 @@
                         <option value="0.50">50% Speed</option>
                         <option value="0.75">75% Speed</option>
                         <option value="1.00" selected>100% Speed</option>
+                    </select>
+                    <select id="flam3-zoom-level">
+                        <option value="0.3">30% Zoom</option>
+                        <option value="0.5">50% Zoom</option>
+                        <option value="0.7" selected>70% Zoom</option>
+                        <option value="1.0">100% Zoom</option>
+                        <option value="1.5">150% Zoom</option>
+                        <option value="2.0">200% Zoom</option>
+                        <option value="3.0">300% Zoom</option>
                     </select>
                     <div id="renderingbar"></div>
                 </div>

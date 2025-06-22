@@ -1234,7 +1234,7 @@ const init = async (canvas, starts_running = true) => {
   const config = window.config = new Config
   config.width = canvas.width
   config.height = canvas.height
-  config.zoom = 1
+  config.zoom = 0.7  // Default zoom out a bit
   config.gamma = 2.2
   config.final = -1
   config.cfinal = -1
@@ -1683,6 +1683,28 @@ const init = async (canvas, starts_running = true) => {
       // FIXME: Clear the canvas
       should_clear_histogram = true
     },
+    clearAnimations() {
+      // Clear all animation checkboxes
+      for (let i = 0; i < fractal.length; i++) {
+        fractal[i].animateX = false;
+        fractal[i].animateY = false;
+      }
+      
+      // Update all XFormEditor checkboxes
+      for (let i = 0; i < gui.length; i++) {
+        const editor = gui[i];
+        if (editor.editor && editor.editor.shadowRoot) {
+          const animateXCheckbox = editor.editor.shadowRoot.querySelector('input[name="animateX"]');
+          const animateYCheckbox = editor.editor.shadowRoot.querySelector('input[name="animateY"]');
+          if (animateXCheckbox) animateXCheckbox.checked = false;
+          if (animateYCheckbox) animateYCheckbox.checked = false;
+        }
+      }
+      
+      // Update GPU buffers and clear
+      device.queue.writeBuffer(fractalBuffer, 0, fractal.buffer, 0);
+      flam3.clear();
+    },
     randomize() {
       try {
         console.log("Randomizing fractal...");
@@ -1697,6 +1719,17 @@ const init = async (canvas, starts_running = true) => {
         config.rotation = params.rot;
         config.mirrorX = params.mirrorX;
         config.mirrorY = params.mirrorY;
+        
+        // Select a random colormap
+        const cmapNames = Object.keys(cmaps);
+        const randomCmap = cmapNames[Math.floor(Math.random() * cmapNames.length)];
+        flam3.cmap = randomCmap;
+        
+        // Update the colormap dropdown
+        const cmapSelect = document.getElementById('flam3-cmap');
+        if (cmapSelect) {
+          cmapSelect.value = randomCmap;
+        }
         
         // Write parameters to GPU buffer
         device.queue.writeBuffer(configBuffer, 0, config.buffer, 0);
@@ -1858,28 +1891,32 @@ const init = async (canvas, starts_running = true) => {
   // Function to refresh the XForm editors list
   function refreshXFormEditorsList() {
     try {
-      // Clear existing XForm editors
-      while (gui.length > 1) { // Keep the default controls
-        const editor = gui[0];
-        if (editor !== default_controls) {
-          if (editor.editor) {
-            editor.editor.remove();
-          }
-          gui.splice(0, 1);
-        } else {
-          break;
+      // Clear existing XForm editors (but keep default_controls which is the last element)
+      const newGui = [];
+      for (let i = 0; i < gui.length; i++) {
+        const editor = gui[i];
+        if (editor === default_controls) {
+          newGui.push(editor);
+        } else if (editor.editor) {
+          editor.editor.remove();
         }
       }
       
-      // Recreate XForm editors
+      // Reset gui array with only default_controls
+      gui.length = 0;
+      gui.push(...newGui);
+      
+      // Clear DOM elements (but keep the "Add XForm" button)
       const xform_list = document.getElementById('xforms');
       if (xform_list) {
-        while (xform_list.children.length > 1) { // Keep the "Add XForm" button
+        while (xform_list.children.length > 1) {
           xform_list.removeChild(xform_list.children[0]);
         }
         
+        // Recreate XForm editors and insert them at the beginning of gui array
         for (let i = 0; i < fractal.length; i++) {
-          gui.push(new XFormEditor(fractal[i], xform_list));
+          const newEditor = new XFormEditor(fractal[i], xform_list);
+          gui.splice(gui.length - 1, 0, newEditor); // Insert before default_controls
         }
       }
     } catch (error) {
@@ -1994,6 +2031,17 @@ window.document.body.onload = async () => {
       // Clear histogram when changing animation speed for crisp rendering
       window.flam3.clear();
       
+      window.flam3.updateParams();
+    };
+  }
+  
+  // Zoom level control
+  const zoomLevelSelect = document.getElementById('flam3-zoom-level');
+  if (zoomLevelSelect) {
+    zoomLevelSelect.onchange = ev => {
+      const zoom = parseFloat(ev.currentTarget.value);
+      window.flam3.config.zoom = zoom;
+      window.flam3.clear();
       window.flam3.updateParams();
     };
   }
@@ -2164,6 +2212,16 @@ window.document.body.onload = async () => {
         });
       } else {
         console.warn("Randomize button not found");
+      }
+      
+      // Add handler for Clear Animations button
+      const clearAnimationsButton = document.getElementById('flam3-clear-animations');
+      if (clearAnimationsButton) {
+        clearAnimationsButton.addEventListener('click', () => {
+          if (window.flam3 && typeof window.flam3.clearAnimations === 'function') {
+            window.flam3.clearAnimations();
+          }
+        });
       }
       
       console.log("UI controls setup complete");
