@@ -1,103 +1,120 @@
-.fractal-viewer {
+.fractal-viewer-container {
+  display: grid;
+  grid-template-columns: 1fr 350px 400px;
+  gap: 1.5rem;
+  padding: 1.5rem;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--background);
+}
+
+.fractal-main {
   display: flex;
   flex-direction: column;
+  gap: 1.5rem;
+  height: 100%;
+}
+
+.fractal-canvas-card {
+  flex: 1;
+  display: flex;
   align-items: center;
-  background-color: black;
-  padding: 1rem;
-  min-height: 100vh;
-}
-
-.fractal-loading {
-  color: white;
-  font-size: 1.5rem;
-  margin: 2rem;
-}
-
-.fractal-error {
-  color: #ff6b6b;
-  font-size: 1.2rem;
-  margin: 2rem;
-  text-align: center;
+  justify-content: center;
+  overflow: hidden;
+  background: white;
+  border: 1px solid var(--border);
 }
 
 .fractal-canvas {
-  border: 2px solid #333;
-  margin-bottom: 1rem;
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  background: black;
 }
 
-.fractal-controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  justify-content: center;
-  margin-bottom: 1rem;
-}
-
-.fractal-controls button {
-  background-color: #4CAF50;
-  color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: background-color 0.3s;
-}
-
-.fractal-controls button:hover:not(:disabled) {
-  background-color: #45a049;
-}
-
-.fractal-controls button:disabled {
-  background-color: #666;
-  cursor: not-allowed;
-}
-
-.fractal-controls select {
-  background-color: #4CAF50;
-  color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-}
-
-.fractal-controls select:hover {
-  background-color: #45a049;
-}
-
-.fractal-xforms {
-  background-color: rgb(60, 60, 60);
-  border-radius: 0px 10px 30px 10px;
-  color: white;
-  padding: 1rem;
-  min-width: 300px;
-}
-
-#add-xform {
+.fractal-controls-panel {
   width: 100%;
-  background-color: transparent;
-  color: white;
-  border: 2px dashed rgb(40, 40, 40);
-  padding: 1rem;
-  text-align: center;
-  cursor: pointer;
-  transition: background-color 0.3s;
+  overflow-y: auto;
+  height: 100%;
 }
 
-#add-xform:hover {
-  background-color: rgba(255, 255, 255, 0.1);
+.fractal-xforms-panel {
+  width: 100%;
+  overflow-y: auto;
+  height: 100%;
+  background: white;
+  border: 1px solid var(--border);
 }
 
-/* Style for XForm editors */
+/* Custom styles for XForm editors */
 xform-editor {
   display: block;
   padding: 1rem;
-  border-bottom: 1px dashed rgb(40, 40, 40);
-  color: white;
+  border-radius: 0.5rem;
+  background: rgba(0, 0, 0, 0.03);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  transition: all 0.2s;
 }
 
-xform-editor:last-child {
-  border-bottom: none;
+xform-editor:hover {
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.2);
+}
+
+/* Responsive layout */
+@media (max-width: 1400px) {
+  .fractal-viewer-container {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto auto;
+  }
+  
+  .fractal-canvas-card {
+    height: 50vh;
+  }
+  
+  .fractal-controls-panel {
+    width: 100%;
+    height: auto;
+    max-height: 40vh;
+  }
+  
+  .fractal-xforms-panel {
+    width: 100%;
+    height: auto;
+    max-height: 35vh;
+  }
+}
+
+/* Scrollbar styling */
+.fractal-controls-panel::-webkit-scrollbar,
+.fractal-xforms-panel::-webkit-scrollbar {
+  width: 8px;
+}
+
+.fractal-controls-panel::-webkit-scrollbar-track,
+.fractal-xforms-panel::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+}
+
+.fractal-controls-panel::-webkit-scrollbar-thumb,
+.fractal-xforms-panel::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+.fractal-controls-panel::-webkit-scrollbar-thumb:hover,
+.fractal-xforms-panel::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Loading animation */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }

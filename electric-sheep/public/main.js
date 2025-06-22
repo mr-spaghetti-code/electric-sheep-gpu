@@ -1315,7 +1315,9 @@ const init = async (canvas, starts_running = true) => {
       elem.shadowRoot.querySelector('input[name="animateX"]').checked = xform.animateX
       elem.shadowRoot.querySelector('input[name="animateY"]').checked = xform.animateY
       
-      xform_list.appendChild(elem)
+      if (xform_list) {
+        xform_list.appendChild(elem)
+      }
       this.editor = elem
 
       this.xform = xform
@@ -1532,20 +1534,45 @@ const init = async (canvas, starts_running = true) => {
     }
   }
 
-  const xform_list = document.getElementById('xforms')
   const gui = []
-  for (let i = 0; i < fractal.length; i++)
-    gui.push(new XFormEditor(fractal[i], xform_list))
-  document.getElementById('add-xform').onclick = () => {
-    const xform = fractal.add({ 
-      variation: 'Linear', 
-      color: 0, 
-      a: 1, b: 0, c: 0, d: 0, e: 1, f: 0,
-      animateX: false,
-      animateY: false
-    })
-    gui.splice(0, 0, new XFormEditor(xform, xform_list))
+  
+  // Initialize XFormEditors after DOM is ready
+  const initializeXFormEditors = () => {
+    const xform_list = document.getElementById('xforms')
+    if (!xform_list) {
+      // Try again later if the element doesn't exist yet
+      setTimeout(initializeXFormEditors, 100)
+      return
+    }
+    
+    // Clear existing editors
+    while (gui.length > 0 && gui[0] !== default_controls) {
+      gui.shift()
+    }
+    
+    // Create editors for existing transforms
+    for (let i = 0; i < fractal.length; i++) {
+      gui.push(new XFormEditor(fractal[i], xform_list))
+    }
+    
+    // Set up add button
+    const addButton = document.getElementById('add-xform')
+    if (addButton) {
+      addButton.onclick = () => {
+        const xform = fractal.add({ 
+          variation: 'Linear', 
+          color: 0, 
+          a: 1, b: 0, c: 0, d: 0, e: 1, f: 0,
+          animateX: false,
+          animateY: false
+        })
+        gui.splice(0, 0, new XFormEditor(xform, xform_list))
+      }
+    }
   }
+  
+  // Start trying to initialize editors
+  setTimeout(initializeXFormEditors, 0)
 
   let running = starts_running
   let lastFrameTime = 0; // Track last frame time for smoother animation
@@ -1891,6 +1918,13 @@ const init = async (canvas, starts_running = true) => {
   // Function to refresh the XForm editors list
   function refreshXFormEditorsList() {
     try {
+      const xform_list = document.getElementById('xforms');
+      if (!xform_list) {
+        // Element doesn't exist yet, try again later
+        setTimeout(refreshXFormEditorsList, 100);
+        return;
+      }
+      
       // Clear existing XForm editors (but keep default_controls which is the last element)
       const newGui = [];
       for (let i = 0; i < gui.length; i++) {
@@ -1907,17 +1941,14 @@ const init = async (canvas, starts_running = true) => {
       gui.push(...newGui);
       
       // Clear DOM elements (but keep the "Add XForm" button)
-      const xform_list = document.getElementById('xforms');
-      if (xform_list) {
-        while (xform_list.children.length > 1) {
-          xform_list.removeChild(xform_list.children[0]);
-        }
-        
-        // Recreate XForm editors and insert them at the beginning of gui array
-        for (let i = 0; i < fractal.length; i++) {
-          const newEditor = new XFormEditor(fractal[i], xform_list);
-          gui.splice(gui.length - 1, 0, newEditor); // Insert before default_controls
-        }
+      while (xform_list.children.length > 0) {
+        xform_list.removeChild(xform_list.children[0]);
+      }
+      
+      // Recreate XForm editors and insert them at the beginning of gui array
+      for (let i = 0; i < fractal.length; i++) {
+        const newEditor = new XFormEditor(fractal[i], xform_list);
+        gui.splice(gui.length - 1, 0, newEditor); // Insert before default_controls
       }
     } catch (error) {
       console.log("Error refreshing XForm editors list:", error);

@@ -1,10 +1,42 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Slider } from '@/components/ui/slider';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Toggle } from '@/components/ui/toggle';
+import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
+import { Badge } from '@/components/ui/badge';
+import {
+  Play,
+  Pause,
+  SkipForward,
+  RotateCcw,
+  Shuffle,
+  Download,
+  Eye,
+  EyeOff,
+  Sparkles,
+  Zap,
+  ZoomIn,
+  ZoomOut,
+  Palette,
+  Settings2,
+  Plus,
+  X
+} from 'lucide-react';
 import './FractalViewer.css';
 
 declare global {
   interface Window {
     flam3: any;
     config: any;
+    cmaps: any;
+    FractalFunctions: any;
+    init: any;
+    populateVariationOptions: any;
+    fractalModuleLoaded: boolean;
   }
 }
 
@@ -21,10 +53,22 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedCmap, setSelectedCmap] = useState('gnuplot');
-  const [animationSpeed, setAnimationSpeed] = useState('1.00');
-  const [zoomLevel, setZoomLevel] = useState('0.7');
+  const [animationSpeed, setAnimationSpeed] = useState(1.0);
+  const [zoomLevel, setZoomLevel] = useState(0.7);
   const [isRunning, setIsRunning] = useState(true);
   const [guiEnabled, setGuiEnabled] = useState(true);
+  const [cmapOptions, setCmapOptions] = useState<string[]>([]);
+
+  // Advanced controls state
+  const [finalXform, setFinalXform] = useState(-1);
+  const [cfinalXform, setCfinalXform] = useState(-1);
+  const [rotation, setRotation] = useState(1);
+  const [mirrorX, setMirrorX] = useState(false);
+  const [mirrorY, setMirrorY] = useState(false);
+  const [gamma, setGamma] = useState(2.2);
+  const [hueShift, setHueShift] = useState(0);
+  const [satShift, setSatShift] = useState(0);
+  const [lightShift, setLightShift] = useState(0);
 
   useEffect(() => {
     let script: HTMLScriptElement | null = null;
@@ -36,24 +80,68 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
       <style>
         .editor-element {
           display: block;
-          margin-top: 0.2em;
+          margin-top: 0.8em;
         }
         .vector {
           vertical-align: middle;
           display: inline-block;
-          border-color: black;
-          border-style: solid;
-          border-width: 0em 0.01em 0em 0.01em;
-          border-radius: 0.3em;
+          border: 1px solid rgba(0, 0, 0, 0.2);
+          border-radius: 0.375rem;
+          padding: 0.25rem;
+          background: rgba(0, 0, 0, 0.05);
         }
         .affine-transform {
           min-width: 200px;
+          margin: 0.5rem 0;
         }
         .vector td {
           text-align: right;
+          padding: 0.25rem 0.5rem;
+          color: black;
+          font-family: monospace;
+          font-weight: 600;
         }
         .remove-button {
           text-align: center;
+          margin-top: 1rem;
+        }
+        select, input[type="range"] {
+          background: white;
+          border: 1px solid rgba(0, 0, 0, 0.2);
+          color: black;
+          padding: 0.375rem 0.75rem;
+          border-radius: 0.375rem;
+          margin-left: 0.5rem;
+        }
+        select:hover, input[type="range"]:hover {
+          background: rgba(0, 0, 0, 0.05);
+        }
+        label {
+          color: black;
+          font-size: 0.875rem;
+          font-weight: 500;
+        }
+        i {
+          color: black;
+          font-style: normal;
+          font-weight: 600;
+        }
+        button {
+          background: #dc2626;
+          color: white;
+          border: none;
+          padding: 0.375rem 1rem;
+          border-radius: 0.375rem;
+          cursor: pointer;
+          font-size: 0.875rem;
+        }
+        button:hover {
+          background: #b91c1c;
+        }
+        input[type="checkbox"] {
+          margin-right: 0.5rem;
+          width: 1rem;
+          height: 1rem;
         }
       </style>
       <label class="editor-element">
@@ -63,7 +151,7 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
       </label>
       <label class="editor-element">
         <i>Color:</i>
-        <input type="range" name="color" id="price" min="0" max="1" step="0.0001" value="0">
+        <input type="range" name="color" min="0" max="1" step="0.0001" value="0">
       </label>
       <div class="editor-element">
         <label><input type="checkbox" name="animateX"> Animate X</label>
@@ -175,6 +263,12 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
           if (initFunction) {
             const flam3 = await initFunction(canvasRef.current, true);
             window.flam3 = flam3;
+            
+            // Set colormap options
+            if (window.cmaps) {
+              setCmapOptions(Object.keys(window.cmaps));
+            }
+            
             setIsLoading(false);
           } else {
             throw new Error('Fractal initialization function not found');
@@ -256,91 +350,457 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
     }
   };
 
-  const handleCmapChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const value = e.target.value;
+  const handleCmapChange = (value: string) => {
     setSelectedCmap(value);
     if (window.flam3) {
       window.flam3.cmap = value;
     }
   };
 
-  const handleAnimationSpeedChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const value = e.target.value;
-    setAnimationSpeed(value);
+  const handleAnimationSpeedChange = (value: number[]) => {
+    const speed = value[0];
+    setAnimationSpeed(speed);
     if (window.flam3 && window.flam3.config) {
-      window.flam3.config.animationSpeed = parseFloat(value);
+      window.flam3.config.animationSpeed = speed;
       window.flam3.clear();
       window.flam3.updateParams();
     }
   };
 
-  const handleZoomLevelChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const value = e.target.value;
-    setZoomLevel(value);
+  const handleZoomLevelChange = (value: number[]) => {
+    const zoom = value[0];
+    setZoomLevel(zoom);
     if (window.flam3 && window.flam3.config) {
-      window.flam3.config.zoom = parseFloat(value);
+      window.flam3.config.zoom = zoom;
       window.flam3.clear();
+      window.flam3.updateParams();
+    }
+  };
+
+  // Advanced control handlers
+  const handleRotationChange = (value: number[]) => {
+    const rot = value[0];
+    setRotation(rot);
+    if (window.flam3 && window.flam3.config) {
+      window.flam3.config.rotation = rot;
+      window.flam3.updateParams();
+    }
+  };
+
+  const handleMirrorXChange = (pressed: boolean) => {
+    setMirrorX(pressed);
+    if (window.flam3 && window.flam3.config) {
+      window.flam3.config.mirrorX = pressed;
+      window.flam3.updateParams();
+    }
+  };
+
+  const handleMirrorYChange = (pressed: boolean) => {
+    setMirrorY(pressed);
+    if (window.flam3 && window.flam3.config) {
+      window.flam3.config.mirrorY = pressed;
+      window.flam3.updateParams();
+    }
+  };
+
+  const handleGammaChange = (value: number[]) => {
+    const g = value[0];
+    setGamma(g);
+    if (window.flam3 && window.flam3.config) {
+      window.flam3.config.gamma = g;
+      window.flam3.updateParams();
+    }
+  };
+
+  const handleHueShiftChange = (value: number[]) => {
+    const h = value[0];
+    setHueShift(h);
+    if (window.flam3 && window.flam3.config) {
+      window.flam3.config.hueShift = h;
+      window.flam3.updateParams();
+    }
+  };
+
+  const handleSatShiftChange = (value: number[]) => {
+    const s = value[0];
+    setSatShift(s);
+    if (window.flam3 && window.flam3.config) {
+      window.flam3.config.satShift = s;
+      window.flam3.updateParams();
+    }
+  };
+
+  const handleLightShiftChange = (value: number[]) => {
+    const l = value[0];
+    setLightShift(l);
+    if (window.flam3 && window.flam3.config) {
+      window.flam3.config.lightShift = l;
       window.flam3.updateParams();
     }
   };
 
   if (error) {
-    return <div className="fractal-error">Error: {error}</div>;
+    return (
+      <Card className="max-w-md mx-auto mt-8">
+        <CardHeader>
+          <CardTitle className="text-destructive">Error</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p>{error}</p>
+        </CardContent>
+      </Card>
+    );
   }
 
   return (
-    <div className="fractal-viewer">
-      {isLoading && <div className="fractal-loading">Loading WebGPU...</div>}
-      
-      <canvas 
-        ref={canvasRef} 
-        width={width} 
-        height={height}
-        className="fractal-canvas"
-        style={{ display: isLoading ? 'none' : 'block' }}
-      />
-      
+    <div className="fractal-viewer-container">
+      <Card className="fractal-canvas-card">
+        {isLoading && (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center">
+              <Sparkles className="w-12 h-12 mx-auto mb-4 animate-pulse" />
+              <p className="text-lg">Loading WebGPU Fractal Engine...</p>
+            </div>
+          </div>
+        )}
+        
+        <canvas 
+          ref={canvasRef} 
+          width={width} 
+          height={height}
+          className="fractal-canvas"
+          style={{ display: isLoading ? 'none' : 'block' }}
+        />
+      </Card>
+
       {!isLoading && (
-        <div className="fractal-controls">
-          <button onClick={handleStart} disabled={isRunning}>Start</button>
-          <button onClick={handleStop} disabled={!isRunning}>Stop</button>
-          <button onClick={handleStep}>Step</button>
-          <button onClick={handleClear}>Clear</button>
-          <button onClick={handleToggleGui}>Toggle GUI</button>
-          <button onClick={handleRandomize}>Randomize</button>
-          <button onClick={handleClearAnimations}>Clear Animations</button>
-          <button onClick={handleExportPNG}>Export PNG</button>
-          
-          <select value={selectedCmap} onChange={handleCmapChange}>
-            {window.cmaps && Object.keys(window.cmaps).map(name => (
-              <option key={name} value={name}>{name}</option>
-            ))}
-          </select>
-          
-          <select value={animationSpeed} onChange={handleAnimationSpeedChange}>
-            <option value="0.25">25% Speed</option>
-            <option value="0.50">50% Speed</option>
-            <option value="0.75">75% Speed</option>
-            <option value="1.00">100% Speed</option>
-          </select>
-          
-          <select value={zoomLevel} onChange={handleZoomLevelChange}>
-            <option value="0.3">30% Zoom</option>
-            <option value="0.5">50% Zoom</option>
-            <option value="0.7">70% Zoom</option>
-            <option value="1.0">100% Zoom</option>
-            <option value="1.5">150% Zoom</option>
-            <option value="2.0">200% Zoom</option>
-            <option value="3.0">300% Zoom</option>
-          </select>
-          
-          <div id="renderingbar"></div>
-        </div>
+        <Card className="fractal-xforms-panel">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Zap className="w-4 h-4" />
+              Transforms
+            </CardTitle>
+            <Button 
+              id="add-xform" 
+              size="sm" 
+              variant="outline"
+              className="gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              Add Transform
+            </Button>
+          </CardHeader>
+          <CardContent>
+            <div id="xforms" className="space-y-4">
+              {/* XForm editors will be inserted here */}
+            </div>
+          </CardContent>
+        </Card>
       )}
-      
-      <div id="xforms" className="fractal-xforms">
-        <button id="add-xform">Add XForm</button>
-      </div>
+
+      {!isLoading && (
+        <div className="fractal-controls-panel">
+          <Tabs defaultValue="controls" className="w-full h-full">
+            <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="controls">Controls</TabsTrigger>
+                <TabsTrigger value="visual">Visual</TabsTrigger>
+                <TabsTrigger value="advanced">Advanced</TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="controls" className="space-y-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Play className="w-4 h-4" />
+                      Playback Controls
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex gap-2 flex-wrap">
+                      <Toggle 
+                        pressed={isRunning} 
+                        onPressedChange={(pressed) => pressed ? handleStart() : handleStop()}
+                        className="gap-2"
+                      >
+                        {isRunning ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                        {isRunning ? 'Pause' : 'Play'}
+                      </Toggle>
+                      <Button onClick={handleStep} variant="outline" size="sm">
+                        <SkipForward className="w-4 h-4 mr-2" />
+                        Step
+                      </Button>
+                      <Button onClick={handleClear} variant="outline" size="sm">
+                        <RotateCcw className="w-4 h-4 mr-2" />
+                        Clear
+                      </Button>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-sm">Animation Speed</Label>
+                      <div className="flex items-center gap-4">
+                        <Slider
+                          value={[animationSpeed]}
+                          onValueChange={handleAnimationSpeedChange}
+                          min={0.25}
+                          max={2}
+                          step={0.25}
+                          className="flex-1"
+                        />
+                        <Badge variant="secondary">{animationSpeed * 100}%</Badge>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Sparkles className="w-4 h-4" />
+                      Generation
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex gap-2">
+                      <Button onClick={handleRandomize} className="flex-1">
+                        <Shuffle className="w-4 h-4 mr-2" />
+                        Randomize
+                      </Button>
+                      <Button onClick={handleClearAnimations} variant="outline" className="flex-1">
+                        <X className="w-4 h-4 mr-2" />
+                        Clear Animations
+                      </Button>
+                    </div>
+                    <Toggle 
+                      pressed={guiEnabled} 
+                      onPressedChange={handleToggleGui}
+                      className="w-full justify-start gap-2"
+                    >
+                      {guiEnabled ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                      Transform Overlay
+                    </Toggle>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Download className="w-4 h-4" />
+                      Export
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <Button onClick={handleExportPNG} className="w-full">
+                      <Download className="w-4 h-4 mr-2" />
+                      Export as PNG
+                    </Button>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+              
+              <TabsContent value="visual" className="space-y-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Palette className="w-4 h-4" />
+                      Color Palette
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <Select value={selectedCmap} onValueChange={handleCmapChange}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select a color palette" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {cmapOptions.map(name => (
+                          <SelectItem key={name} value={name}>
+                            {name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <ZoomIn className="w-4 h-4" />
+                      View Settings
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <Label className="text-sm">Zoom Level</Label>
+                      <div className="flex items-center gap-4">
+                        <Slider
+                          value={[zoomLevel]}
+                          onValueChange={handleZoomLevelChange}
+                          min={0.3}
+                          max={3}
+                          step={0.1}
+                          className="flex-1"
+                        />
+                        <Badge variant="secondary">{Math.round(zoomLevel * 100)}%</Badge>
+                      </div>
+                    </div>
+
+                    <Separator />
+
+                    <div className="space-y-2">
+                      <Label className="text-sm">Gamma Correction</Label>
+                      <div className="flex items-center gap-4">
+                        <Slider
+                          value={[gamma]}
+                          onValueChange={handleGammaChange}
+                          min={0.1}
+                          max={5}
+                          step={0.1}
+                          className="flex-1"
+                        />
+                        <Badge variant="secondary">{gamma.toFixed(1)}</Badge>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Color Adjustments</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <Label className="text-sm">Hue Shift</Label>
+                      <div className="flex items-center gap-4">
+                        <Slider
+                          value={[hueShift]}
+                          onValueChange={handleHueShiftChange}
+                          min={-1}
+                          max={1}
+                          step={0.01}
+                          className="flex-1"
+                        />
+                        <Badge variant="secondary">{hueShift.toFixed(2)}</Badge>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-sm">Saturation</Label>
+                      <div className="flex items-center gap-4">
+                        <Slider
+                          value={[satShift]}
+                          onValueChange={handleSatShiftChange}
+                          min={-1}
+                          max={1}
+                          step={0.01}
+                          className="flex-1"
+                        />
+                        <Badge variant="secondary">{satShift.toFixed(2)}</Badge>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-sm">Lightness</Label>
+                      <div className="flex items-center gap-4">
+                        <Slider
+                          value={[lightShift]}
+                          onValueChange={handleLightShiftChange}
+                          min={-1}
+                          max={1}
+                          step={0.01}
+                          className="flex-1"
+                        />
+                        <Badge variant="secondary">{lightShift.toFixed(2)}</Badge>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+              
+              <TabsContent value="advanced" className="space-y-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Settings2 className="w-4 h-4" />
+                      Transform Settings
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <Label className="text-sm">Rotation Symmetry</Label>
+                      <div className="flex items-center gap-4">
+                        <Slider
+                          value={[rotation]}
+                          onValueChange={handleRotationChange}
+                          min={1}
+                          max={20}
+                          step={1}
+                          className="flex-1"
+                        />
+                        <Badge variant="secondary">{rotation}</Badge>
+                      </div>
+                    </div>
+
+                    <Separator />
+
+                    <div className="space-y-2">
+                      <Label className="text-sm">Mirror Settings</Label>
+                      <div className="flex gap-2">
+                        <Toggle 
+                          pressed={mirrorX} 
+                          onPressedChange={handleMirrorXChange}
+                          className="flex-1"
+                        >
+                          Mirror X
+                        </Toggle>
+                        <Toggle 
+                          pressed={mirrorY} 
+                          onPressedChange={handleMirrorYChange}
+                          className="flex-1"
+                        >
+                          Mirror Y
+                        </Toggle>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Transform Chain</CardTitle>
+                    <CardDescription>
+                      Final and color final transform settings
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="final-xform">Final Transform</Label>
+                      <Select value={finalXform.toString()} onValueChange={(v) => setFinalXform(parseInt(v))}>
+                        <SelectTrigger id="final-xform">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="-1">None</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="cfinal-xform">Color Final</Label>
+                      <Select value={cfinalXform.toString()} onValueChange={(v) => setCfinalXform(parseInt(v))}>
+                        <SelectTrigger id="cfinal-xform">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="-1">None</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
+          </div>
+        )}
     </div>
   );
 };
