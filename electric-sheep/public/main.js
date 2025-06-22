@@ -206,8 +206,10 @@ class Fractal extends StructWithFlexibleArrayElement {
   set length(value) { return this._length[0] = value }
 }
 
-function in_circle(point, x, y, r) {
-  return (x - point.x) ** 2 + (y - point.y) ** 2 < (r / flam3.config.zoom) ** 2
+function in_circle(point, x, y, r, zoom) {
+  const distance_sq = (x - point.x) ** 2 + (y - point.y) ** 2;
+  const radius_sq = (r / zoom) ** 2;
+  return distance_sq < radius_sq;
 }
 
 function squared_distance_to_line(point, from_x, from_y, to_x, to_y) {
@@ -221,8 +223,8 @@ function squared_distance_to_line(point, from_x, from_y, to_x, to_y) {
   return (pa_x - ba_x * h) ** 2 + (pa_y - ba_y * h) ** 2
 }
 
-function in_line(point, from_x, from_y, to_x, to_y, width) {
-  return squared_distance_to_line(point, from_x, from_y, to_x, to_y) < (width * 4 / flam3.config.zoom) ** 2
+function in_line(point, from_x, from_y, to_x, to_y, width, zoom) {
+  return squared_distance_to_line(point, from_x, from_y, to_x, to_y) < (width * 4 / zoom) ** 2
 }
 
 class CMap extends StructWithFlexibleArrayElement {
@@ -1338,12 +1340,20 @@ const init = async (canvas, starts_running = true) => {
       const p01_y = this.xform.e + p00_y
       const p10_x = this.xform.a + p00_x
       const p10_y = this.xform.d + p00_y
-           if (in_circle(point, p00_x, p00_y, 0.06)) { this.currently_dragging = 'ring00' }
-      else if (in_circle(point, p01_x, p01_y, 0.04)) { this.currently_dragging = 'ring01' }
-      else if (in_circle(point, p10_x, p10_y, 0.04)) { this.currently_dragging = 'ring10' }
-      else if (in_line(point, p10_x, p10_y, p01_x, p01_y, 0.01)) { this.currently_dragging = 'line_10_01' }
-      else if (in_line(point, p00_x, p00_y, p01_x, p01_y, 0.01)) { this.currently_dragging = 'line_00_01' }
-      else if (in_line(point, p00_x, p00_y, p10_x, p10_y, 0.01)) { this.currently_dragging = 'line_00_10' }
+      
+           if (in_circle(point, p00_x, p00_y, 0.15, config.zoom)) { 
+             this.currently_dragging = 'ring00';
+           }
+      else if (in_circle(point, p01_x, p01_y, 0.12, config.zoom)) { 
+             this.currently_dragging = 'ring01';
+           }
+      else if (in_circle(point, p10_x, p10_y, 0.12, config.zoom)) { 
+             this.currently_dragging = 'ring10';
+           }
+      else if (in_line(point, p10_x, p10_y, p01_x, p01_y, 0.01, config.zoom)) { this.currently_dragging = 'line_10_01' }
+      else if (in_line(point, p00_x, p00_y, p01_x, p01_y, 0.01, config.zoom)) { this.currently_dragging = 'line_00_01' }
+      else if (in_line(point, p00_x, p00_y, p10_x, p10_y, 0.01, config.zoom)) { this.currently_dragging = 'line_00_10' }
+      
       if (this.currently_dragging === 'line_10_01') {
         this.current_drag_data = {
           // Cache the triangle shape so we can avoid divide-by-zero issues :)
@@ -1352,7 +1362,8 @@ const init = async (canvas, starts_running = true) => {
           line_10_01: { from_x: p10_x, from_y: p10_y, to_x: p01_x, to_y: p01_y },
         }
       }
-      return this.currently_dragging !== undefined
+      
+      return this.currently_dragging !== undefined;
     }
     pointer_up() {
       this.currently_dragging = undefined
@@ -1545,14 +1556,17 @@ const init = async (canvas, starts_running = true) => {
       return
     }
     
-    // Clear existing editors
-    while (gui.length > 0 && gui[0] !== default_controls) {
-      gui.shift()
+    // Clear existing XForm editors (keep default_controls which should be last)
+    while (gui.length > 1) {
+      const editor = gui.shift()
+      if (editor.editor) {
+        editor.editor.remove()
+      }
     }
     
-    // Create editors for existing transforms
-    for (let i = 0; i < fractal.length; i++) {
-      gui.push(new XFormEditor(fractal[i], xform_list))
+    // Create editors for existing transforms and insert them at the beginning
+    for (let i = fractal.length - 1; i >= 0; i--) {
+      gui.unshift(new XFormEditor(fractal[i], xform_list))
     }
     
     // Set up add button
@@ -1566,7 +1580,9 @@ const init = async (canvas, starts_running = true) => {
           animateX: false,
           animateY: false
         })
-        gui.splice(0, 0, new XFormEditor(xform, xform_list))
+        // Insert new XForm editor at the beginning (before default_controls at the end)
+        gui.unshift(new XFormEditor(xform, xform_list))
+        flam3.clear()
       }
     }
   }
@@ -1710,11 +1726,38 @@ const init = async (canvas, starts_running = true) => {
       // FIXME: Clear the canvas
       should_clear_histogram = true
     },
-    clearAnimations() {
-      // Clear all animation checkboxes
-      for (let i = 0; i < fractal.length; i++) {
-        fractal[i].animateX = false;
-        fractal[i].animateY = false;
+    toggleAnimations(enable) {
+      // If enable is undefined, determine based on current state
+      if (enable === undefined) {
+        // Check if any animations are currently active
+        let hasActiveAnimations = false;
+        for (let i = 0; i < fractal.length; i++) {
+          if (fractal[i].animateX || fractal[i].animateY) {
+            hasActiveAnimations = true;
+            break;
+          }
+        }
+        enable = !hasActiveAnimations;
+      }
+      
+      if (enable) {
+        // Restore saved animation states or use defaults
+        for (let i = 0; i < fractal.length; i++) {
+          if (fractal[i].savedAnimateX !== undefined) {
+            fractal[i].animateX = fractal[i].savedAnimateX;
+          }
+          if (fractal[i].savedAnimateY !== undefined) {
+            fractal[i].animateY = fractal[i].savedAnimateY;
+          }
+        }
+      } else {
+        // Save current animation states before clearing
+        for (let i = 0; i < fractal.length; i++) {
+          fractal[i].savedAnimateX = fractal[i].animateX;
+          fractal[i].savedAnimateY = fractal[i].animateY;
+          fractal[i].animateX = false;
+          fractal[i].animateY = false;
+        }
       }
       
       // Update all XFormEditor checkboxes
@@ -1723,14 +1766,26 @@ const init = async (canvas, starts_running = true) => {
         if (editor.editor && editor.editor.shadowRoot) {
           const animateXCheckbox = editor.editor.shadowRoot.querySelector('input[name="animateX"]');
           const animateYCheckbox = editor.editor.shadowRoot.querySelector('input[name="animateY"]');
-          if (animateXCheckbox) animateXCheckbox.checked = false;
-          if (animateYCheckbox) animateYCheckbox.checked = false;
+          if (animateXCheckbox) animateXCheckbox.checked = fractal[i] ? fractal[i].animateX : false;
+          if (animateYCheckbox) animateYCheckbox.checked = fractal[i] ? fractal[i].animateY : false;
         }
       }
       
       // Update GPU buffers and clear
       device.queue.writeBuffer(fractalBuffer, 0, fractal.buffer, 0);
       flam3.clear();
+      
+      return enable; // Return the new state
+    },
+    
+    // Helper function to check if animations are currently enabled
+    hasActiveAnimations() {
+      for (let i = 0; i < fractal.length; i++) {
+        if (fractal[i].animateX || fractal[i].animateY) {
+          return true;
+        }
+      }
+      return false;
     },
     randomize() {
       try {
@@ -1925,30 +1980,22 @@ const init = async (canvas, starts_running = true) => {
         return;
       }
       
-      // Clear existing XForm editors (but keep default_controls which is the last element)
-      const newGui = [];
-      for (let i = 0; i < gui.length; i++) {
-        const editor = gui[i];
-        if (editor === default_controls) {
-          newGui.push(editor);
-        } else if (editor.editor) {
-          editor.editor.remove();
+      // Clear existing XForm editors (but keep default_controls which should be the last element)
+      while (gui.length > 1) {
+        const editor = gui.shift()
+        if (editor.editor) {
+          editor.editor.remove()
         }
       }
       
-      // Reset gui array with only default_controls
-      gui.length = 0;
-      gui.push(...newGui);
-      
-      // Clear DOM elements (but keep the "Add XForm" button)
+      // Clear DOM elements
       while (xform_list.children.length > 0) {
         xform_list.removeChild(xform_list.children[0]);
       }
       
-      // Recreate XForm editors and insert them at the beginning of gui array
-      for (let i = 0; i < fractal.length; i++) {
-        const newEditor = new XFormEditor(fractal[i], xform_list);
-        gui.splice(gui.length - 1, 0, newEditor); // Insert before default_controls
+      // Recreate XForm editors and insert them at the beginning (before default_controls)
+      for (let i = fractal.length - 1; i >= 0; i--) {
+        gui.unshift(new XFormEditor(fractal[i], xform_list));
       }
     } catch (error) {
       console.log("Error refreshing XForm editors list:", error);
@@ -1983,8 +2030,8 @@ const init = async (canvas, starts_running = true) => {
     pointer_down() { return true },
     pointer_up() { return true },
     pointer_move(_point, ev) {
-      const cursor_delta_x = -ev.movementX / canvas.width  * 2
-      const cursor_delta_y = -ev.movementY / canvas.height * 2
+      const cursor_delta_x = -ev.movementX / canvas.clientWidth  * 2
+      const cursor_delta_y = -ev.movementY / canvas.clientHeight * 2
       flam3.config.x += cursor_delta_x / config.zoom
       flam3.config.y += cursor_delta_y / config.zoom
       flam3.clear()
@@ -1994,16 +2041,33 @@ const init = async (canvas, starts_running = true) => {
   gui.push(default_controls)
   function to_normalized_point(ev) {
     return {
-      x: (ev.offsetX / canvas.width  * 2 - 1) / config.zoom + flam3.config.x,
-      y: (ev.offsetY / canvas.height * 2 - 1) / config.zoom + flam3.config.y
-    }
+      x: (ev.offsetX / canvas.clientWidth  * 2 - 1) / config.zoom + flam3.config.x,
+      y: (ev.offsetY / canvas.clientHeight * 2 - 1) / config.zoom + flam3.config.y
+    };
   }
   canvas.onpointerdown = ev => {
     const normalized_point = to_normalized_point(ev)
     if (!flam3.gui)
       default_controls.pointer_down(normalized_point, ev)
-    else
-      gui.find(gui_element => gui_element.pointer_down(normalized_point, ev))
+    else {
+      // Test XForm editors first (all elements except the last one which is default_controls)
+      let handled = false;
+      for (let i = 0; i < gui.length - 1; i++) {
+        const element = gui[i];
+        if (element.pointer_down && element.pointer_down(normalized_point, ev)) {
+          handled = true;
+          break;
+        }
+      }
+      
+      // If no XForm editor handled it, use default_controls (which is always the last element)
+      if (!handled && gui.length > 0) {
+        const defaultControls = gui[gui.length - 1];
+        if (defaultControls.pointer_down) {
+          defaultControls.pointer_down(normalized_point, ev);
+        }
+      }
+    }
 
     canvas.onpointermove = ev => {
       const normalized_point = to_normalized_point(ev)
@@ -2256,12 +2320,12 @@ if (typeof window !== 'undefined' && !window.fractalModuleLoaded) {
         console.warn("Randomize button not found");
       }
       
-      // Add handler for Clear Animations button
-      const clearAnimationsButton = document.getElementById('flam3-clear-animations');
-      if (clearAnimationsButton) {
-        clearAnimationsButton.addEventListener('click', () => {
-          if (window.flam3 && typeof window.flam3.clearAnimations === 'function') {
-            window.flam3.clearAnimations();
+      // Add handler for Toggle Animations button
+      const toggleAnimationsButton = document.getElementById('flam3-toggle-animations');
+      if (toggleAnimationsButton) {
+        toggleAnimationsButton.addEventListener('click', () => {
+          if (window.flam3 && typeof window.flam3.toggleAnimations === 'function') {
+            window.flam3.toggleAnimations();
           }
         });
       }

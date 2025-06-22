@@ -20,11 +20,9 @@ import {
   Sparkles,
   Zap,
   ZoomIn,
-  ZoomOut,
   Palette,
   Settings2,
-  Plus,
-  X
+  Plus
 } from 'lucide-react';
 import './FractalViewer.css';
 
@@ -57,6 +55,7 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
   const [zoomLevel, setZoomLevel] = useState(0.7);
   const [isRunning, setIsRunning] = useState(true);
   const [guiEnabled, setGuiEnabled] = useState(true);
+  const [animationsEnabled, setAnimationsEnabled] = useState(false);
   const [cmapOptions, setCmapOptions] = useState<string[]>([]);
 
   // Advanced controls state
@@ -269,6 +268,31 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
               setCmapOptions(Object.keys(window.cmaps));
             }
             
+            // Initialize with a random fractal
+            if (flam3.randomize) {
+              flam3.randomize();
+              
+              // Sync UI state with the randomized config values
+              if (flam3.config) {
+                const config = flam3.config;
+                setRotation(config.rotation);
+                setMirrorX(config.mirrorX);
+                setMirrorY(config.mirrorY);
+                setGamma(config.gamma);
+                setHueShift(config.hueShift);
+                setSatShift(config.satShift);
+                setLightShift(config.lightShift);
+                setZoomLevel(config.zoom);
+                setFinalXform(config.final);
+                setCfinalXform(config.cfinal);
+              }
+            }
+            
+            // Initialize animation state
+            if (flam3.hasActiveAnimations) {
+              setAnimationsEnabled(flam3.hasActiveAnimations());
+            }
+            
             setIsLoading(false);
           } else {
             throw new Error('Fractal initialization function not found');
@@ -335,14 +359,49 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
   const handleRandomize = () => {
     if (window.flam3 && window.flam3.randomize) {
       window.flam3.randomize();
+      
+      // Sync UI state with the new config values
+      if (window.flam3.config) {
+        const config = window.flam3.config;
+        setRotation(config.rotation);
+        setMirrorX(config.mirrorX);
+        setMirrorY(config.mirrorY);
+        setGamma(config.gamma);
+        setHueShift(config.hueShift);
+        setSatShift(config.satShift);
+        setLightShift(config.lightShift);
+        setZoomLevel(config.zoom);
+        setFinalXform(config.final);
+        setCfinalXform(config.cfinal);
+        
+        // Update animation state
+        if (window.flam3.hasActiveAnimations) {
+          setAnimationsEnabled(window.flam3.hasActiveAnimations());
+        }
+      }
     }
   };
 
-  const handleClearAnimations = () => {
-    if (window.flam3 && window.flam3.clearAnimations) {
-      window.flam3.clearAnimations();
+  const handleToggleAnimations = (enabled: boolean) => {
+    if (window.flam3 && window.flam3.toggleAnimations) {
+      const actualState = window.flam3.toggleAnimations(enabled);
+      setAnimationsEnabled(actualState);
     }
   };
+
+  // Check animation state periodically to keep UI in sync
+  useEffect(() => {
+    if (!isLoading && window.flam3 && window.flam3.hasActiveAnimations) {
+      const interval = setInterval(() => {
+        const hasAnimations = window.flam3.hasActiveAnimations();
+        if (hasAnimations !== animationsEnabled) {
+          setAnimationsEnabled(hasAnimations);
+        }
+      }, 1000); // Check every second
+
+      return () => clearInterval(interval);
+    }
+  }, [isLoading, animationsEnabled]);
 
   const handleExportPNG = () => {
     if (window.flam3 && window.flam3.exportPNG) {
@@ -565,18 +624,30 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
                         <Shuffle className="w-4 h-4 mr-2" />
                         Randomize
                       </Button>
-                      <Button onClick={handleClearAnimations} variant="outline" className="flex-1">
-                        <X className="w-4 h-4 mr-2" />
-                        Clear Animations
-                      </Button>
                     </div>
+                    <Toggle 
+                      pressed={animationsEnabled} 
+                      onPressedChange={handleToggleAnimations}
+                      className={`w-full justify-start gap-2 ${
+                        animationsEnabled 
+                          ? 'bg-green-100 hover:bg-green-200 text-green-800 border-green-300 data-[state=on]:bg-green-500 data-[state=on]:text-white' 
+                          : 'bg-red-100 hover:bg-red-200 text-red-800 border-red-300'
+                      }`}
+                    >
+                      <Zap className="w-4 h-4" />
+                      {animationsEnabled ? 'Animations Enabled' : 'Animations Disabled'}
+                    </Toggle>
                     <Toggle 
                       pressed={guiEnabled} 
                       onPressedChange={handleToggleGui}
-                      className="w-full justify-start gap-2"
+                      className={`w-full justify-start gap-2 ${
+                        guiEnabled 
+                          ? 'bg-green-100 hover:bg-green-200 text-green-800 border-green-300 data-[state=on]:bg-green-500 data-[state=on]:text-white' 
+                          : 'bg-red-100 hover:bg-red-200 text-red-800 border-red-300'
+                      }`}
                     >
                       {guiEnabled ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                      Transform Overlay
+                      {guiEnabled ? 'Transform Overlay Enabled' : 'Transform Overlay Disabled'}
                     </Toggle>
                   </CardContent>
                 </Card>
