@@ -16,7 +16,8 @@ import {
   X,
   Settings,
   Minimize,
-  Hand
+  Hand,
+  Download
 } from 'lucide-react';
 import type { FractalConfig, ExtendedFractalTransform } from '@/types/fractal';
 
@@ -38,6 +39,8 @@ interface HandControlState {
   leftMiddlePinching: boolean;
   rightMiddlePinching: boolean;
   lastRandomizeTime: number;
+  peaceSignStartTime: number | null;
+  peaceSignProgress: number;
 }
 
 const FullScreenViewer: React.FC = () => {
@@ -69,7 +72,9 @@ const FullScreenViewer: React.FC = () => {
     originalPan: { x: 0, y: 0 },
     leftMiddlePinching: false,
     rightMiddlePinching: false,
-    lastRandomizeTime: 0
+    lastRandomizeTime: 0,
+    peaceSignStartTime: null,
+    peaceSignProgress: 0
   });
 
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -319,97 +324,132 @@ const FullScreenViewer: React.FC = () => {
     // Detect pinch gestures
     const leftPinch = leftHand ? isPinching(leftHand) : false;
     const rightPinch = rightHand ? isPinching(rightHand) : false;
-    const leftMiddlePinch = leftHand ? isMiddlePinching(leftHand) : false;
-    const rightMiddlePinch = rightHand ? isMiddlePinching(rightHand) : false;
+    const leftPeaceSign = leftHand ? isPeaceSign(leftHand) : false;
+    const rightPeaceSign = rightHand ? isPeaceSign(rightHand) : false;
 
-    // Handle left hand pinch for zoom control
-    if (leftPinch && leftCenter) {
-      if (!handControlRef.current.leftPinching) {
-        // Start pinching - store initial state
-        setHandControl(prev => ({
-          ...prev,
-          leftPinching: true,
-          leftPinchStart: leftCenter,
-          originalZoom: window.flam3?.config?.zoom || 1
-        }));
-      } else if (handControlRef.current.leftPinchStart && window.flam3?.config) {
-        // Continue pinching - adjust zoom based on Y movement
-        const deltaY = leftCenter.y - handControlRef.current.leftPinchStart.y;
-        // Use exponential scaling similar to mouse wheel: up = zoom in, down = zoom out
-        const zoomMultiplier = Math.exp(-deltaY * 5); // Increased sensitivity
-        const newZoom = handControlRef.current.originalZoom * zoomMultiplier;
-        
-        // Apply zoom with clamping (same as mouse wheel in main.js)
-        window.flam3.config.zoom = Math.max(0.01, Math.min(50, newZoom));
-        window.flam3.clear();
-      }
-    } else if (handControlRef.current.leftPinching) {
-      // Stop pinching
-      setHandControl(prev => ({
-        ...prev,
-        leftPinching: false,
-        leftPinchStart: null
-      }));
-    }
+    // Handle two-handed pinch gestures (both hands pinching simultaneously)
+    if (leftPinch && rightPinch && leftHand && rightHand) {
+      // Get thumb positions for both hands
+      const leftThumb = leftHand[4]; // Thumb tip
+      const rightThumb = rightHand[4]; // Thumb tip
+      
+      // Calculate distance between thumbs
+      const thumbDistance = Math.hypot(
+        rightThumb.x - leftThumb.x,
+        rightThumb.y - leftThumb.y,
+        rightThumb.z - leftThumb.z
+      );
+      
+      // Calculate midpoint between thumbs
+      const thumbMidpoint = {
+        x: (leftThumb.x + rightThumb.x) / 2,
+        y: (leftThumb.y + rightThumb.y) / 2
+      };
 
-    // Handle right hand pinch for pan control
-    if (rightPinch && rightCenter) {
-      if (!handControlRef.current.rightPinching) {
-        // Start pinching - store initial state
+      if (!handControlRef.current.leftPinching && !handControlRef.current.rightPinching) {
+        // Start two-handed pinching - store initial state
         const currentX = (window.flam3?.config as FractalConfig & { x?: number })?.x || 0;
         const currentY = (window.flam3?.config as FractalConfig & { y?: number })?.y || 0;
         setHandControl(prev => ({
           ...prev,
+          leftPinching: true,
           rightPinching: true,
-          rightPinchStart: rightCenter,
-          originalPan: { 
-            x: currentX, 
-            y: currentY 
-          }
+          leftPinchStart: { x: leftThumb.x, y: leftThumb.y },
+          rightPinchStart: { x: rightThumb.x, y: rightThumb.y },
+          originalZoom: window.flam3?.config?.zoom || 1,
+          originalPan: { x: currentX, y: currentY }
         }));
-      } else if (handControlRef.current.rightPinchStart && window.flam3?.config) {
-        // Continue pinching - adjust pan based on XY movement
-        // Scale similar to pointer movement in main.js
-        const deltaX = (rightCenter.x - handControlRef.current.rightPinchStart.x) * 4; // Increased sensitivity
-        const deltaY = (rightCenter.y - handControlRef.current.rightPinchStart.y) * 4;
+      } else if (handControlRef.current.leftPinchStart && handControlRef.current.rightPinchStart && window.flam3?.config) {
+        // Continue two-handed pinching
         
-        // Apply pan offset similar to main.js pointer_move
+        // Calculate original thumb distance
+        const originalThumbDistance = Math.hypot(
+          handControlRef.current.rightPinchStart.x - handControlRef.current.leftPinchStart.x,
+          handControlRef.current.rightPinchStart.y - handControlRef.current.leftPinchStart.y
+        );
+        
+                 // Calculate zoom based on distance change (wider = zoom in, closer = zoom out)
+         const distanceRatio = thumbDistance / originalThumbDistance;
+         const newZoom = handControlRef.current.originalZoom * distanceRatio; // wider distance = larger zoom
+        
+        // Apply zoom with clamping
+        window.flam3.config.zoom = Math.max(0.01, Math.min(50, newZoom));
+        
+        // Calculate original midpoint
+        const originalMidpoint = {
+          x: (handControlRef.current.leftPinchStart.x + handControlRef.current.rightPinchStart.x) / 2,
+          y: (handControlRef.current.leftPinchStart.y + handControlRef.current.rightPinchStart.y) / 2
+        };
+        
+        // Calculate pan based on midpoint movement
+        const deltaX = (thumbMidpoint.x - originalMidpoint.x) * 4; // Increased sensitivity
+        const deltaY = (thumbMidpoint.y - originalMidpoint.y) * 4;
+        
+        // Apply pan offset
         const newX = handControlRef.current.originalPan.x + deltaX / window.flam3.config.zoom;
         const newY = handControlRef.current.originalPan.y - deltaY / window.flam3.config.zoom; // Flip Y for natural movement
         (window.flam3.config as FractalConfig & { x?: number }).x = newX;
         (window.flam3.config as FractalConfig & { y?: number }).y = newY;
+        
         window.flam3.clear();
       }
-    } else if (handControlRef.current.rightPinching) {
-      // Stop pinching
+    } else if (handControlRef.current.leftPinching || handControlRef.current.rightPinching) {
+      // Stop two-handed pinching when either hand stops pinching
       setHandControl(prev => ({
         ...prev,
+        leftPinching: false,
         rightPinching: false,
+        leftPinchStart: null,
         rightPinchStart: null
       }));
     }
 
-    // Handle middle finger pinch for randomization (either hand)
-    if (leftMiddlePinch || rightMiddlePinch) {
+    // Handle peace sign gesture for randomization (either hand)
+    if (leftPeaceSign || rightPeaceSign) {
       const currentTime = Date.now();
+      
       if (!handControlRef.current.leftMiddlePinching && !handControlRef.current.rightMiddlePinching) {
-        // Start middle pinching - trigger randomization with cooldown
-        if (currentTime - handControlRef.current.lastRandomizeTime > 2000) { // 2 second cooldown
+        // Start peace sign gesture - begin 3-second timer
+        if (currentTime - handControlRef.current.lastRandomizeTime > 5000) { // 5 second cooldown between randomizations
+          setHandControl(prev => ({
+            ...prev,
+            leftMiddlePinching: leftPeaceSign,
+            rightMiddlePinching: rightPeaceSign,
+            peaceSignStartTime: currentTime,
+            peaceSignProgress: 0
+          }));
+        }
+      } else if (handControlRef.current.peaceSignStartTime !== null) {
+        // Continue peace sign - update progress
+        const elapsedTime = currentTime - handControlRef.current.peaceSignStartTime;
+        const progress = Math.min(elapsedTime / 3000, 1); // 3 seconds = 100%
+        
+        setHandControl(prev => ({
+          ...prev,
+          peaceSignProgress: progress
+        }));
+        
+        // Trigger randomization after 3 seconds
+        if (progress >= 1 && currentTime - handControlRef.current.lastRandomizeTime > 5000) {
           handleRandomize();
           setHandControl(prev => ({
             ...prev,
-            leftMiddlePinching: leftMiddlePinch,
-            rightMiddlePinching: rightMiddlePinch,
-            lastRandomizeTime: currentTime
+            lastRandomizeTime: currentTime,
+            peaceSignStartTime: null,
+            peaceSignProgress: 0,
+            leftMiddlePinching: false,
+            rightMiddlePinching: false
           }));
         }
       }
     } else if (handControlRef.current.leftMiddlePinching || handControlRef.current.rightMiddlePinching) {
-      // Stop middle pinching
+      // Stop peace sign gesture - reset timer
       setHandControl(prev => ({
         ...prev,
         leftMiddlePinching: false,
-        rightMiddlePinching: false
+        rightMiddlePinching: false,
+        peaceSignStartTime: null,
+        peaceSignProgress: 0
       }));
     }
 
@@ -510,19 +550,33 @@ const FullScreenViewer: React.FC = () => {
     return distance < 0.06; // Pinch threshold from the example
   };
 
-  // Helper function to detect middle finger pinch gesture (thumb + middle finger)
-  const isMiddlePinching = (landmarks: NormalizedLandmark[]) => {
-    // Calculate distance between thumb tip (4) and middle finger tip (12)
-    const thumbTip = landmarks[4];
-    const middleTip = landmarks[12];
+  // Helper function to detect peace sign gesture (index and middle fingers extended, ring and pinky folded)
+  const isPeaceSign = (landmarks: NormalizedLandmark[]) => {
+    // Get relevant landmarks
+    const indexTip = landmarks[8];   // Index finger tip
+    const indexPip = landmarks[6];   // Index finger PIP joint
+    const middleTip = landmarks[12]; // Middle finger tip
+    const middlePip = landmarks[10]; // Middle finger PIP joint
+    const ringTip = landmarks[16];   // Ring finger tip
+    const ringPip = landmarks[14];   // Ring finger PIP joint
+    const pinkyTip = landmarks[20];  // Pinky tip
+    const pinkyPip = landmarks[18];  // Pinky PIP joint
+    const wrist = landmarks[0];      // Wrist
     
-    const distance = Math.hypot(
-      thumbTip.x - middleTip.x,
-      thumbTip.y - middleTip.y,
-      thumbTip.z - middleTip.z
-    );
+    // Calculate distances from wrist to determine if fingers are extended
+    const indexExtended = Math.hypot(indexTip.x - wrist.x, indexTip.y - wrist.y) > 
+                         Math.hypot(indexPip.x - wrist.x, indexPip.y - wrist.y);
+    const middleExtended = Math.hypot(middleTip.x - wrist.x, middleTip.y - wrist.y) > 
+                          Math.hypot(middlePip.x - wrist.x, middlePip.y - wrist.y);
     
-    return distance < 0.06; // Same pinch threshold
+    // Check if ring and pinky are folded (tip closer to wrist than PIP joint)
+    const ringFolded = Math.hypot(ringTip.x - wrist.x, ringTip.y - wrist.y) < 
+                      Math.hypot(ringPip.x - wrist.x, ringPip.y - wrist.y) * 1.1; // Small tolerance
+    const pinkyFolded = Math.hypot(pinkyTip.x - wrist.x, pinkyTip.y - wrist.y) < 
+                       Math.hypot(pinkyPip.x - wrist.x, pinkyPip.y - wrist.y) * 1.1; // Small tolerance
+    
+    // Peace sign: index and middle extended, ring and pinky folded
+    return indexExtended && middleExtended && ringFolded && pinkyFolded;
   };
 
   // Select random xforms for hand control
@@ -731,7 +785,9 @@ const FullScreenViewer: React.FC = () => {
         originalPan: { x: 0, y: 0 },
         leftMiddlePinching: false,
         rightMiddlePinching: false,
-        lastRandomizeTime: 0
+        lastRandomizeTime: 0,
+        peaceSignStartTime: null,
+        peaceSignProgress: 0
       });
     }
   };
@@ -747,6 +803,28 @@ const FullScreenViewer: React.FC = () => {
     setSelectedCmap(value);
     if (window.flam3) {
       window.flam3.cmap = value;
+    }
+  };
+
+  const handleDownloadPNG = () => {
+    if (canvasRef.current) {
+      try {
+        // Create a temporary canvas to ensure we get the full resolution
+        const canvas = canvasRef.current;
+        const dataURL = canvas.toDataURL('image/png', 1.0);
+        
+        // Create download link
+        const link = document.createElement('a');
+        link.download = `fractal-${Date.now()}.png`;
+        link.href = dataURL;
+        
+        // Trigger download
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } catch (error) {
+        console.error('Error downloading PNG:', error);
+      }
     }
   };
 
@@ -842,6 +920,26 @@ const FullScreenViewer: React.FC = () => {
         </div>
       )}
 
+      {/* Peace sign progress bar */}
+      {!isLoading && handControl.enabled && handControl.peaceSignProgress > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-black/80 backdrop-blur-sm border-t border-white/20">
+          <div className="px-6 py-3">
+            <div className="flex items-center gap-3 mb-2">
+              <span className="text-white text-sm">✌️ Hold peace sign to randomize</span>
+              <span className="text-white/70 text-xs">
+                {Math.ceil((1 - handControl.peaceSignProgress) * 3)}s
+              </span>
+            </div>
+            <div className="w-full bg-white/20 rounded-full h-2">
+              <div 
+                className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full transition-all duration-100 ease-out"
+                style={{ width: `${handControl.peaceSignProgress * 100}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Floating controls panel */}
       {!isLoading && showControls && (
         <div className="absolute top-16 right-4 z-40 w-80 max-h-[calc(100vh-6rem)] overflow-y-auto">
@@ -879,6 +977,11 @@ const FullScreenViewer: React.FC = () => {
                     Random
                   </Button>
                 </div>
+
+                <Button onClick={handleDownloadPNG} variant="outline" className="w-full">
+                  <Download className="w-4 h-4 mr-2" />
+                  Download PNG
+                </Button>
 
                 <Toggle 
                   pressed={animationsEnabled} 
@@ -956,12 +1059,12 @@ const FullScreenViewer: React.FC = () => {
                     )}
                     <p>Move hands to control position & rotation</p>
                     <div className="text-cyan-400 text-xs mt-2">
-                      <p>• Left hand pinch + up/down = Zoom</p>
-                      <p>• Right hand pinch + move = Pan</p>
-                      <p>• Middle finger pinch = Randomize</p>
-                      {handControl.leftPinching && <p className="text-yellow-400">🤏 Left hand pinching (zoom)</p>}
-                      {handControl.rightPinching && <p className="text-yellow-400">🤏 Right hand pinching (pan)</p>}
-                      {(handControl.leftMiddlePinching || handControl.rightMiddlePinching) && <p className="text-green-400">🎲 Middle pinch (randomize)</p>}
+                      <p>• Both hands pinch = Zoom & Pan</p>
+                      <p>• Thumbs apart/together = Zoom in/out</p>
+                      <p>• Move thumb midpoint = Pan</p>
+                      <p>• Peace sign ✌️ = Randomize</p>
+                      {(handControl.leftPinching && handControl.rightPinching) && <p className="text-yellow-400">🤏 Two-handed control active</p>}
+                      {(handControl.leftMiddlePinching || handControl.rightMiddlePinching) && <p className="text-green-400">✌️ Peace sign (randomize)</p>}
                     </div>
                   </div>
                 )}
