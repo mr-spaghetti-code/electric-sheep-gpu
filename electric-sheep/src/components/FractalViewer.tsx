@@ -27,47 +27,23 @@ import {
   Loader2
 } from 'lucide-react';
 import './FractalViewer.css';
+import type { FractalConfig, FractalInstance } from '@/types/fractal';
 
-interface FractalConfig {
-  animationSpeed: number;
-  zoom: number;
-  rotation: number;
-  mirrorX: boolean;
-  mirrorY: boolean;
-  gamma: number;
-  hueShift: number;
-  satShift: number;
-  lightShift: number;
-  final: number;
-  cfinal: number;
-  numPoints: number;
-}
-
-interface FractalInstance {
-  config: FractalConfig;
-  fractal: { length: number; [key: number]: { variation: string } };
+// Extend the FractalInstance interface for the FractalViewer specific needs
+interface FractalViewerInstance extends FractalInstance {
   exportPNG: () => void;
   exportGIF: (progressCallback: (current: number, total: number, status?: string) => void) => Promise<void>;
-  randomize: () => void;
-  toggleAnimations: (enabled?: boolean) => boolean;
-  hasActiveAnimations: () => boolean;
-  gui: boolean;
-  updateParams: () => void;
-  updateUIControls?: () => void;
-  cmap: string;
-  start: () => void;
-  stop: () => void;
   step: () => void;
-  clear: () => void;
+  updateUIControls?: () => void;
 }
 
 declare global {
   interface Window {
-    flam3: FractalInstance;
+    flam3: FractalViewerInstance;
     config: FractalConfig;
     cmaps: Record<string, unknown>;
     FractalFunctions: unknown;
-    init: (canvas: HTMLCanvasElement, startRunning?: boolean) => Promise<FractalInstance>;
+    init: (canvas: HTMLCanvasElement, startRunning?: boolean) => Promise<FractalViewerInstance>;
     populateVariationOptions: () => void;
     fractalModuleLoaded: boolean;
     refreshXFormEditorsList?: () => void;

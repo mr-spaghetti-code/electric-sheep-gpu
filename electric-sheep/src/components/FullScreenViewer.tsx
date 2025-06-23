@@ -18,41 +18,7 @@ import {
   Minimize,
   Hand
 } from 'lucide-react';
-
-interface FractalConfig {
-  x: number;
-  y: number;
-  animationSpeed: number;
-  zoom: number;
-  rotation: number;
-  mirrorX: boolean;
-  mirrorY: boolean;
-  gamma: number;
-  hueShift: number;
-  satShift: number;
-  lightShift: number;
-  final: number;
-  cfinal: number;
-  numPoints: number;
-}
-
-interface ExtendedFractalTransform {
-  variation: string;
-  animateX: boolean;
-  animateY: boolean;
-  a: number;
-  b: number;
-  c: number;
-  d: number;
-  e: number;
-  f: number;
-}
-
-interface FractalTransform {
-  variation: string;
-  animateX: boolean;
-  animateY: boolean;
-}
+import type { FractalConfig, ExtendedFractalTransform } from '@/types/fractal';
 
 interface HandControlState {
   enabled: boolean;
@@ -69,35 +35,9 @@ interface HandControlState {
   rightPinchStart: { x: number; y: number } | null;
   originalZoom: number;
   originalPan: { x: number; y: number };
-}
-
-interface FractalInstance {
-  config: FractalConfig;
-  fractal: { 
-    length: number; 
-    [key: number]: FractalTransform;
-  };
-  randomize: () => void;
-  toggleAnimations: (enabled?: boolean) => boolean;
-  hasActiveAnimations: () => boolean;
-  gui: boolean;
-  cmap: string;
-  start: () => void;
-  stop: () => void;
-  clear: () => void;
-  updateParams: () => void;
-}
-
-declare global {
-  interface Window {
-    flam3: FractalInstance;
-    config: FractalConfig;
-    cmaps: Record<string, unknown>;
-    FractalFunctions: unknown;
-    init: (canvas: HTMLCanvasElement, startRunning?: boolean) => Promise<FractalInstance>;
-    populateVariationOptions: () => void;
-    fractalModuleLoaded: boolean;
-  }
+  leftMiddlePinching: boolean;
+  rightMiddlePinching: boolean;
+  lastRandomizeTime: number;
 }
 
 const FullScreenViewer: React.FC = () => {
@@ -126,7 +66,10 @@ const FullScreenViewer: React.FC = () => {
     leftPinchStart: null,
     rightPinchStart: null,
     originalZoom: 1,
-    originalPan: { x: 0, y: 0 }
+    originalPan: { x: 0, y: 0 },
+    leftMiddlePinching: false,
+    rightMiddlePinching: false,
+    lastRandomizeTime: 0
   });
 
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -376,6 +319,8 @@ const FullScreenViewer: React.FC = () => {
     // Detect pinch gestures
     const leftPinch = leftHand ? isPinching(leftHand) : false;
     const rightPinch = rightHand ? isPinching(rightHand) : false;
+    const leftMiddlePinch = leftHand ? isMiddlePinching(leftHand) : false;
+    const rightMiddlePinch = rightHand ? isMiddlePinching(rightHand) : false;
 
     // Handle left hand pinch for zoom control
     if (leftPinch && leftCenter) {
@@ -411,8 +356,8 @@ const FullScreenViewer: React.FC = () => {
     if (rightPinch && rightCenter) {
       if (!handControlRef.current.rightPinching) {
         // Start pinching - store initial state
-        const currentX = (window.flam3?.config as any)?.x || 0;
-        const currentY = (window.flam3?.config as any)?.y || 0;
+        const currentX = (window.flam3?.config as FractalConfig & { x?: number })?.x || 0;
+        const currentY = (window.flam3?.config as FractalConfig & { y?: number })?.y || 0;
         setHandControl(prev => ({
           ...prev,
           rightPinching: true,
@@ -431,8 +376,8 @@ const FullScreenViewer: React.FC = () => {
         // Apply pan offset similar to main.js pointer_move
         const newX = handControlRef.current.originalPan.x + deltaX / window.flam3.config.zoom;
         const newY = handControlRef.current.originalPan.y - deltaY / window.flam3.config.zoom; // Flip Y for natural movement
-        (window.flam3.config as any).x = newX;
-        (window.flam3.config as any).y = newY;
+        (window.flam3.config as FractalConfig & { x?: number }).x = newX;
+        (window.flam3.config as FractalConfig & { y?: number }).y = newY;
         window.flam3.clear();
       }
     } else if (handControlRef.current.rightPinching) {
@@ -441,6 +386,30 @@ const FullScreenViewer: React.FC = () => {
         ...prev,
         rightPinching: false,
         rightPinchStart: null
+      }));
+    }
+
+    // Handle middle finger pinch for randomization (either hand)
+    if (leftMiddlePinch || rightMiddlePinch) {
+      const currentTime = Date.now();
+      if (!handControlRef.current.leftMiddlePinching && !handControlRef.current.rightMiddlePinching) {
+        // Start middle pinching - trigger randomization with cooldown
+        if (currentTime - handControlRef.current.lastRandomizeTime > 2000) { // 2 second cooldown
+          handleRandomize();
+          setHandControl(prev => ({
+            ...prev,
+            leftMiddlePinching: leftMiddlePinch,
+            rightMiddlePinching: rightMiddlePinch,
+            lastRandomizeTime: currentTime
+          }));
+        }
+      }
+    } else if (handControlRef.current.leftMiddlePinching || handControlRef.current.rightMiddlePinching) {
+      // Stop middle pinching
+      setHandControl(prev => ({
+        ...prev,
+        leftMiddlePinching: false,
+        rightMiddlePinching: false
       }));
     }
 
@@ -526,7 +495,7 @@ const FullScreenViewer: React.FC = () => {
     return Math.atan2(dy, dx);
   };
 
-  // Helper function to detect pinch gesture
+  // Helper function to detect pinch gesture (thumb + index finger)
   const isPinching = (landmarks: NormalizedLandmark[]) => {
     // Calculate distance between thumb tip (4) and index finger tip (8)
     const thumbTip = landmarks[4];
@@ -539,6 +508,21 @@ const FullScreenViewer: React.FC = () => {
     );
     
     return distance < 0.06; // Pinch threshold from the example
+  };
+
+  // Helper function to detect middle finger pinch gesture (thumb + middle finger)
+  const isMiddlePinching = (landmarks: NormalizedLandmark[]) => {
+    // Calculate distance between thumb tip (4) and middle finger tip (12)
+    const thumbTip = landmarks[4];
+    const middleTip = landmarks[12];
+    
+    const distance = Math.hypot(
+      thumbTip.x - middleTip.x,
+      thumbTip.y - middleTip.y,
+      thumbTip.z - middleTip.z
+    );
+    
+    return distance < 0.06; // Same pinch threshold
   };
 
   // Select random xforms for hand control
@@ -633,14 +617,14 @@ const FullScreenViewer: React.FC = () => {
       if (window.flam3.fractal && window.flam3.fractal.length > 0) {
         // First, disable all animations
         for (let i = 0; i < window.flam3.fractal.length; i++) {
-          const transform = window.flam3.fractal[i] as any;
+          const transform = window.flam3.fractal[i] as ExtendedFractalTransform;
           transform.animateX = false;
           transform.animateY = false;
         }
         
         // Pick a random transform to animate
         const randomTransformIndex = Math.floor(Math.random() * window.flam3.fractal.length);
-        const randomTransform = window.flam3.fractal[randomTransformIndex] as any;
+        const randomTransform = window.flam3.fractal[randomTransformIndex] as ExtendedFractalTransform;
         
         // Randomly choose to animate X, Y, or both
         const animationType = Math.random();
@@ -699,7 +683,7 @@ const FullScreenViewer: React.FC = () => {
       if (window.flam3?.fractal) {
         handControl.originalTransforms.forEach((original, index) => {
           if (window.flam3.fractal[index]) {
-            const xform = window.flam3.fractal[index] as any;
+            const xform = window.flam3.fractal[index] as ExtendedFractalTransform;
             xform.a = original.a;
             xform.b = original.b;
             xform.c = original.c;
@@ -712,6 +696,22 @@ const FullScreenViewer: React.FC = () => {
         if (window.flam3.updateParams) {
           window.flam3.updateParams();
         }
+      }
+      
+      // Stop camera stream
+      if (videoRef.current?.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach(track => {
+          track.stop();
+          console.log('Stopped camera track:', track.kind);
+        });
+        videoRef.current.srcObject = null;
+      }
+      
+      // Stop MediaPipe Hands
+      if (handsRef.current) {
+        handsRef.current.close();
+        handsRef.current = null;
       }
       
       setHandControl({
@@ -728,7 +728,10 @@ const FullScreenViewer: React.FC = () => {
         leftPinchStart: null,
         rightPinchStart: null,
         originalZoom: 1,
-        originalPan: { x: 0, y: 0 }
+        originalPan: { x: 0, y: 0 },
+        leftMiddlePinching: false,
+        rightMiddlePinching: false,
+        lastRandomizeTime: 0
       });
     }
   };
@@ -955,8 +958,10 @@ const FullScreenViewer: React.FC = () => {
                     <div className="text-cyan-400 text-xs mt-2">
                       <p>• Left hand pinch + up/down = Zoom</p>
                       <p>• Right hand pinch + move = Pan</p>
+                      <p>• Middle finger pinch = Randomize</p>
                       {handControl.leftPinching && <p className="text-yellow-400">🤏 Left hand pinching (zoom)</p>}
                       {handControl.rightPinching && <p className="text-yellow-400">🤏 Right hand pinching (pan)</p>}
+                      {(handControl.leftMiddlePinching || handControl.rightMiddlePinching) && <p className="text-green-400">🎲 Middle pinch (randomize)</p>}
                     </div>
                   </div>
                 )}
