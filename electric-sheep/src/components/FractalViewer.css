@@ -1,6 +1,6 @@
 .fractal-viewer-container {
   display: grid;
-  grid-template-columns: 1fr 350px 400px;
+  grid-template-columns: 1fr 400px;
   gap: 1.5rem;
   padding: 1.5rem;
   height: 100vh;
@@ -39,13 +39,7 @@
   height: 100%;
 }
 
-.fractal-xforms-panel {
-  width: 100%;
-  overflow-y: auto;
-  height: 100%;
-  background: var(--card);
-  border: 1px solid var(--border);
-}
+
 
 /* Custom styles for XForm editors */
 xform-editor {
@@ -100,23 +94,17 @@ xform-editor input[type="number"]:focus {
 }
 
 /* Responsive layout */
-@media (max-width: 1400px) {
+@media (max-width: 1200px) {
   .fractal-viewer-container {
     grid-template-columns: 1fr;
-    grid-template-rows: 1fr auto auto;
+    grid-template-rows: 1fr auto;
   }
   
   .fractal-canvas-card {
-    height: 50vh;
+    height: 60vh;
   }
   
   .fractal-controls-panel {
-    width: 100%;
-    height: auto;
-    max-height: 40vh;
-  }
-  
-  .fractal-xforms-panel {
     width: 100%;
     height: auto;
     max-height: 35vh;
@@ -124,25 +112,21 @@ xform-editor input[type="number"]:focus {
 }
 
 /* Scrollbar styling */
-.fractal-controls-panel::-webkit-scrollbar,
-.fractal-xforms-panel::-webkit-scrollbar {
+.fractal-controls-panel::-webkit-scrollbar {
   width: 8px;
 }
 
-.fractal-controls-panel::-webkit-scrollbar-track,
-.fractal-xforms-panel::-webkit-scrollbar-track {
+.fractal-controls-panel::-webkit-scrollbar-track {
   background: var(--muted);
   border-radius: 4px;
 }
 
-.fractal-controls-panel::-webkit-scrollbar-thumb,
-.fractal-xforms-panel::-webkit-scrollbar-thumb {
+.fractal-controls-panel::-webkit-scrollbar-thumb {
   background: var(--ring);
   border-radius: 4px;
 }
 
-.fractal-controls-panel::-webkit-scrollbar-thumb:hover,
-.fractal-xforms-panel::-webkit-scrollbar-thumb:hover {
+.fractal-controls-panel::-webkit-scrollbar-thumb:hover {
   background: var(--primary);
 }
 

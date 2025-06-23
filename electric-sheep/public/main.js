@@ -1274,69 +1274,97 @@ const init = async (canvas, starts_running = true) => {
 
   class XFormEditor {
     constructor(xform, xform_list) {
-      const elem = document.createElement('xform-editor')
-      elem.setAttribute('variation', xform.variation)
-      elem.setAttribute('a', xform.a.toFixed(2))
-      elem.setAttribute('b', xform.b.toFixed(2))
-      elem.setAttribute('c', xform.c.toFixed(2))
-      elem.setAttribute('d', xform.d.toFixed(2))
-      elem.setAttribute('e', xform.e.toFixed(2))
-      elem.setAttribute('f', xform.f.toFixed(2))
-      elem.setAttribute('color', xform.color)
-      elem.setAttribute('animateX', xform.animateX)
-      elem.setAttribute('animateY', xform.animateY)
-      elem.shadowRoot.querySelector('select').onchange = ev => {
-        this.xform.variation = ev.currentTarget.value
-        flam3.clear()
-      }
-      elem.shadowRoot.querySelector('input[name="color"]').oninput = ev => {
-        this.xform.color = Number.parseFloat(ev.currentTarget.value)
-        flam3.clear()
-      }
-      elem.shadowRoot.querySelector('input[name="animateX"]').onchange = ev => {
-        this.xform.animateX = ev.currentTarget.checked
-        
-        // Store original values when animation is enabled
-        if (ev.currentTarget.checked) {
-          this.original_a = this.xform.a
-          this.original_d = this.xform.d
-        }
-        
-        flam3.clear()
-      }
-      elem.shadowRoot.querySelector('input[name="animateY"]').onchange = ev => {
-        this.xform.animateY = ev.currentTarget.checked
-        
-        // Store original values when animation is enabled
-        if (ev.currentTarget.checked) {
-          this.original_b = this.xform.b
-          this.original_e = this.xform.e
-        }
-        
-        flam3.clear()
-      }
-      elem.shadowRoot.querySelector('button').onclick = _ => {
-        this.remove(fractal)
-      }
-      
-      // Initialize animation checkboxes
-      elem.shadowRoot.querySelector('input[name="animateX"]').checked = xform.animateX
-      elem.shadowRoot.querySelector('input[name="animateY"]').checked = xform.animateY
-      
-      if (xform_list) {
-        xform_list.appendChild(elem)
-      }
-      this.editor = elem
-
       this.xform = xform
       this.current_drag_data = undefined
       this.currently_dragging = undefined
+      this.editor = null
       
       // Store original positions for animation
       this.original_a = xform.a
       this.original_b = xform.b
       this.original_d = xform.d
       this.original_e = xform.e
+
+      // Try to create DOM element if possible
+      try {
+        const elem = document.createElement('xform-editor')
+        elem.setAttribute('variation', xform.variation)
+        elem.setAttribute('a', xform.a.toFixed(2))
+        elem.setAttribute('b', xform.b.toFixed(2))
+        elem.setAttribute('c', xform.c.toFixed(2))
+        elem.setAttribute('d', xform.d.toFixed(2))
+        elem.setAttribute('e', xform.e.toFixed(2))
+        elem.setAttribute('f', xform.f.toFixed(2))
+        elem.setAttribute('color', xform.color)
+        elem.setAttribute('animateX', xform.animateX)
+        elem.setAttribute('animateY', xform.animateY)
+        
+        // Only set up DOM handlers if shadowRoot exists
+        if (elem.shadowRoot) {
+          const selectElem = elem.shadowRoot.querySelector('select')
+          if (selectElem) {
+            selectElem.onchange = ev => {
+              this.xform.variation = ev.currentTarget.value
+              flam3.clear()
+            }
+          }
+          
+          const colorInput = elem.shadowRoot.querySelector('input[name="color"]')
+          if (colorInput) {
+            colorInput.oninput = ev => {
+              this.xform.color = Number.parseFloat(ev.currentTarget.value)
+              flam3.clear()
+            }
+          }
+          
+          const animateXInput = elem.shadowRoot.querySelector('input[name="animateX"]')
+          if (animateXInput) {
+            animateXInput.onchange = ev => {
+              this.xform.animateX = ev.currentTarget.checked
+              
+              // Store original values when animation is enabled
+              if (ev.currentTarget.checked) {
+                this.original_a = this.xform.a
+                this.original_d = this.xform.d
+              }
+              
+              flam3.clear()
+            }
+            animateXInput.checked = xform.animateX
+          }
+          
+          const animateYInput = elem.shadowRoot.querySelector('input[name="animateY"]')
+          if (animateYInput) {
+            animateYInput.onchange = ev => {
+              this.xform.animateY = ev.currentTarget.checked
+              
+              // Store original values when animation is enabled
+              if (ev.currentTarget.checked) {
+                this.original_b = this.xform.b
+                this.original_e = this.xform.e
+              }
+              
+              flam3.clear()
+            }
+            animateYInput.checked = xform.animateY
+          }
+          
+          const removeButton = elem.shadowRoot.querySelector('button')
+          if (removeButton) {
+            removeButton.onclick = _ => {
+              this.remove(fractal)
+            }
+          }
+        }
+        
+        if (xform_list) {
+          xform_list.appendChild(elem)
+        }
+        this.editor = elem
+      } catch (error) {
+        // If DOM creation fails, continue without DOM element but with canvas interaction
+        console.log('XFormEditor DOM creation failed, continuing with canvas interaction only:', error)
+      }
     }
 
     pointer_down(point) {
@@ -1556,11 +1584,6 @@ const init = async (canvas, starts_running = true) => {
   // Initialize XFormEditors after DOM is ready
   const initializeXFormEditors = () => {
     const xform_list = document.getElementById('xforms')
-    if (!xform_list) {
-      // Try again later if the element doesn't exist yet
-      setTimeout(initializeXFormEditors, 100)
-      return
-    }
     
     // Clear existing XForm editors (keep default_controls which should be last)
     while (gui.length > 1) {
@@ -1571,11 +1594,12 @@ const init = async (canvas, starts_running = true) => {
     }
     
     // Create editors for existing transforms and insert them at the beginning
+    // Always create the editors for canvas interaction, regardless of DOM visibility
     for (let i = fractal.length - 1; i >= 0; i--) {
       gui.unshift(new XFormEditor(fractal[i], xform_list))
     }
     
-    // Set up add button
+    // Set up add button if it exists
     const addButton = document.getElementById('add-xform')
     if (addButton) {
       addButton.onclick = () => {
@@ -1593,8 +1617,8 @@ const init = async (canvas, starts_running = true) => {
     }
   }
   
-  // Start trying to initialize editors
-  setTimeout(initializeXFormEditors, 0)
+  // Initialize editors immediately for canvas interaction
+  initializeXFormEditors()
 
   let running = starts_running
   let lastFrameTime = 0; // Track last frame time for smoother animation
@@ -2161,11 +2185,6 @@ const init = async (canvas, starts_running = true) => {
   function refreshXFormEditorsList() {
     try {
       const xform_list = document.getElementById('xforms');
-      if (!xform_list) {
-        // Element doesn't exist yet, try again later
-        setTimeout(refreshXFormEditorsList, 100);
-        return;
-      }
       
       // Clear existing XForm editors (but keep default_controls which should be the last element)
       while (gui.length > 1) {
@@ -2175,12 +2194,15 @@ const init = async (canvas, starts_running = true) => {
         }
       }
       
-      // Clear DOM elements
-      while (xform_list.children.length > 0) {
-        xform_list.removeChild(xform_list.children[0]);
+      // Clear DOM elements if container exists
+      if (xform_list) {
+        while (xform_list.children.length > 0) {
+          xform_list.removeChild(xform_list.children[0]);
+        }
       }
       
       // Recreate XForm editors and insert them at the beginning (before default_controls)
+      // Always create editors for canvas interaction, DOM container is optional
       for (let i = fractal.length - 1; i >= 0; i--) {
         gui.unshift(new XFormEditor(fractal[i], xform_list));
       }
@@ -2278,6 +2300,9 @@ const init = async (canvas, starts_running = true) => {
 
   // Add updateUIControls to flam3 for external access
   flam3.updateUIControls = updateUIControls;
+  
+  // Make refreshXFormEditorsList available globally for React component
+  window.refreshXFormEditorsList = refreshXFormEditorsList;
   
   return flam3
 };

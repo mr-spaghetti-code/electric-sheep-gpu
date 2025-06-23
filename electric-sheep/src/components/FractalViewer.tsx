@@ -53,6 +53,7 @@ interface FractalInstance {
   hasActiveAnimations: () => boolean;
   gui: boolean;
   updateParams: () => void;
+  updateUIControls?: () => void;
   cmap: string;
   start: () => void;
   stop: () => void;
@@ -69,6 +70,7 @@ declare global {
     init: (canvas: HTMLCanvasElement, startRunning?: boolean) => Promise<FractalInstance>;
     populateVariationOptions: () => void;
     fractalModuleLoaded: boolean;
+    refreshXFormEditorsList?: () => void;
   }
 }
 
@@ -490,6 +492,56 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
     }
   }, [isLoading, animationsEnabled]);
 
+  // Reinitialize XForm editors when the transforms tab becomes visible
+  useEffect(() => {
+    if (!isLoading && window.flam3) {
+      // Add observer to detect when transforms tab content becomes visible
+      const xformContainer = document.getElementById('xforms');
+      if (xformContainer) {
+        const observer = new MutationObserver(() => {
+          // Check if the container is visible and has no children
+          if (xformContainer.offsetParent !== null && xformContainer.children.length === 0) {
+            // Reinitialize XForm editors
+            setTimeout(() => {
+              if (window.flam3 && window.flam3.updateUIControls) {
+                window.flam3.updateUIControls();
+              }
+                             // Force refresh of XForm editors
+               if (window.refreshXFormEditorsList) {
+                 window.refreshXFormEditorsList();
+               }
+            }, 100);
+          }
+        });
+
+        // Also use an intersection observer to detect visibility changes
+        const intersectionObserver = new IntersectionObserver((entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting && entry.target.children.length === 0) {
+              // Container is visible but empty - reinitialize
+              setTimeout(() => {
+                if (window.flam3 && window.flam3.updateUIControls) {
+                  window.flam3.updateUIControls();
+                }
+                                 if (window.refreshXFormEditorsList) {
+                   window.refreshXFormEditorsList();
+                 }
+              }, 100);
+            }
+          });
+        });
+
+        observer.observe(xformContainer, { childList: true, subtree: true });
+        intersectionObserver.observe(xformContainer);
+
+        return () => {
+          observer.disconnect();
+          intersectionObserver.disconnect();
+        };
+      }
+    }
+  }, [isLoading]);
+
   const handleExportPNG = () => {
     if (window.flam3 && window.flam3.exportPNG) {
       window.flam3.exportPNG();
@@ -669,36 +721,26 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
       </Card>
 
       {!isLoading && (
-        <Card className="fractal-xforms-panel">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Zap className="w-4 h-4" />
-              Transforms
-            </CardTitle>
-            <Button 
-              id="add-xform" 
-              size="sm" 
-              variant="outline"
-              className="gap-2"
-            >
-              <Plus className="w-4 h-4" />
-              Add Transform
-            </Button>
-          </CardHeader>
-          <CardContent>
-            <div id="xforms" className="space-y-4">
-              {/* XForm editors will be inserted here */}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {!isLoading && (
         <div className="fractal-controls-panel">
-          <Tabs defaultValue="controls" className="w-full h-full">
-            <TabsList className="grid w-full grid-cols-3">
+          <Tabs 
+            defaultValue="controls" 
+            className="w-full h-full"
+            onValueChange={(value) => {
+              // When transforms tab is selected, reinitialize XForm editors if they're missing
+              if (value === 'transforms') {
+                setTimeout(() => {
+                  const xformContainer = document.getElementById('xforms');
+                  if (xformContainer && xformContainer.children.length === 0 && window.refreshXFormEditorsList) {
+                    window.refreshXFormEditorsList();
+                  }
+                }, 100);
+              }
+            }}
+          >
+            <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="controls">Controls</TabsTrigger>
                 <TabsTrigger value="visual">Visual</TabsTrigger>
+                <TabsTrigger value="transforms">Transforms</TabsTrigger>
                 <TabsTrigger value="advanced">Advanced</TabsTrigger>
               </TabsList>
               
@@ -960,6 +1002,51 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
                         />
                         <Badge variant="secondary">{lightShift.toFixed(2)}</Badge>
                       </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+              
+              <TabsContent value="transforms" className="space-y-4">
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Zap className="w-4 h-4" />
+                      Transforms
+                    </CardTitle>
+                    <Button 
+                      id="add-xform" 
+                      size="sm" 
+                      variant="outline"
+                      className="gap-2"
+                      onClick={() => {
+                        // Ensure XForm editors are visible before adding
+                        setTimeout(() => {
+                          const xformContainer = document.getElementById('xforms');
+                          if (xformContainer && xformContainer.children.length === 0 && window.refreshXFormEditorsList) {
+                            window.refreshXFormEditorsList();
+                          }
+                        }, 50);
+                      }}
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add Transform
+                    </Button>
+                  </CardHeader>
+                  <CardContent>
+                    <div 
+                      id="xforms" 
+                      className="space-y-4"
+                      onFocus={() => {
+                        // Reinitialize when the container gets focus
+                        setTimeout(() => {
+                          if (window.refreshXFormEditorsList) {
+                            window.refreshXFormEditorsList();
+                          }
+                        }, 10);
+                      }}
+                    >
+                      {/* XForm editors will be inserted here */}
                     </div>
                   </CardContent>
                 </Card>

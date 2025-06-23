@@ -32,15 +32,17 @@ interface FractalConfig {
   numPoints: number;
 }
 
+interface FractalTransform {
+  variation: string;
+  animateX: boolean;
+  animateY: boolean;
+}
+
 interface FractalInstance {
   config: FractalConfig;
   fractal: { 
     length: number; 
-    [key: number]: { 
-      variation: string;
-      animateX: boolean;
-      animateY: boolean;
-    } 
+    [key: number]: FractalTransform;
   };
   randomize: () => void;
   toggleAnimations: (enabled?: boolean) => boolean;
@@ -76,6 +78,7 @@ const FullScreenViewer: React.FC = () => {
   const [animationsEnabled, setAnimationsEnabled] = useState(false);
   const [cmapOptions, setCmapOptions] = useState<string[]>([]);
   const [autoRandomize, setAutoRandomize] = useState(false);
+  const [guiEnabled, setGuiEnabled] = useState(true);
 
   // Get viewport dimensions and calculate square canvas size
   const [canvasSize, setCanvasSize] = useState(() => {
@@ -169,8 +172,8 @@ const FullScreenViewer: React.FC = () => {
               flam3.updateParams();
             }
             
-            // Disable GUI overlay for clean full screen experience
-            flam3.gui = false;
+            // Enable GUI overlay by default in full screen mode
+            flam3.gui = guiEnabled;
             
             // Enable animations by default in full screen mode
             if (flam3.toggleAnimations) {
@@ -300,6 +303,14 @@ const FullScreenViewer: React.FC = () => {
 
   const handleToggleAutoRandomize = () => {
     setAutoRandomize(prev => !prev);
+  };
+
+  const handleToggleGui = () => {
+    const newGuiState = !guiEnabled;
+    setGuiEnabled(newGuiState);
+    if (window.flam3) {
+      window.flam3.gui = newGuiState;
+    }
   };
 
   const handleToggleAnimations = (enabled: boolean) => {
@@ -450,6 +461,15 @@ const FullScreenViewer: React.FC = () => {
                   <Sparkles className="w-4 h-4 mr-2" />
                   {autoRandomize ? 'Auto-Randomize On' : 'Auto-Randomize Off'}
                 </Toggle>
+
+                <Toggle 
+                  pressed={guiEnabled} 
+                  onPressedChange={handleToggleGui}
+                  className="w-full"
+                >
+                  <Settings className="w-4 h-4 mr-2" />
+                  {guiEnabled ? 'Interactive GUI On' : 'Interactive GUI Off'}
+                </Toggle>
               </div>
 
               <Separator className="bg-white/20" />
@@ -478,6 +498,7 @@ const FullScreenViewer: React.FC = () => {
                 <p><kbd className="px-1 py-0.5 bg-white/20 rounded">SPACE</kbd> Toggle controls</p>
                 <p><kbd className="px-1 py-0.5 bg-white/20 rounded">ESC</kbd> Exit full screen</p>
                 <p>Scroll to zoom • Drag to pan</p>
+                {guiEnabled && <p className="text-blue-400">Interactive GUI: Drag transform rings/lines</p>}
                 {autoRandomize && <p className="text-yellow-400">Auto-randomizing every ~20s</p>}
               </div>
             </CardContent>
