@@ -24,7 +24,9 @@ import {
   Settings2,
   Plus,
   Film,
-  Loader2
+  Loader2,
+  ChevronDown,
+  ChevronRight
 } from 'lucide-react';
 import './FractalViewer.css';
 import type { FractalConfig, FractalInstance } from '@/types/fractal';
@@ -82,6 +84,9 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
   const [lightShift, setLightShift] = useState(0);
   const [numPoints, setNumPoints] = useState(30000);
   const [availableTransforms, setAvailableTransforms] = useState<Array<{id: number, name: string}>>([]);
+  
+  // How to use dropdown state
+  const [showHowTo, setShowHowTo] = useState(false);
   
   // GIF export state
   const [isExportingGif, setIsExportingGif] = useState(false);
@@ -721,6 +726,43 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
               </TabsList>
               
               <TabsContent value="controls" className="space-y-4">
+                <Card>
+                  <CardHeader 
+                    className="cursor-pointer hover:bg-muted/50 transition-colors"
+                    onClick={() => setShowHowTo(!showHowTo)}
+                  >
+                    <CardTitle className="text-lg flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Settings2 className="w-4 h-4" />
+                        How to Use
+                      </div>
+                      {showHowTo ? (
+                        <ChevronDown className="w-4 h-4" />
+                      ) : (
+                        <ChevronRight className="w-4 h-4" />
+                      )}
+                    </CardTitle>
+                  </CardHeader>
+                  {showHowTo && (
+                    <CardContent className="space-y-3">
+                      <div className="text-sm space-y-2">
+                        <div className="flex items-start gap-2">
+                          <span className="text-primary">•</span>
+                          <span>Click and drag on the canvas to pan</span>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <span className="text-primary">•</span>
+                          <span>Zoom using scroll wheel</span>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <span className="text-primary">•</span>
+                          <span>To modify the fractal: Turn on Transform Overlay. Drag the large ring to modify position. Drag smaller rings to adjust vectors.</span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  )}
+                </Card>
+
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-lg flex items-center gap-2">

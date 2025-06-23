@@ -10,8 +10,8 @@ const Navigation: React.FC = () => {
     <nav className="w-full bg-background border-b border-border px-4 py-2">
       <div className="max-w-7xl mx-auto flex items-center justify-between">
         <div className="flex items-center space-x-2">
-          <h1 className="text-xl font-bold">Electric Sheep</h1>
-          <span className="text-sm text-muted-foreground">WebGPU Fractal Renderer</span>
+          <h1 className="text-xl font-bold">FractalMachine.xyz</h1>
+          <span className="text-sm text-muted-foreground">GPU Accelerated Fractal Renderer</span>
         </div>
         
         <div className="flex items-center space-x-2">
