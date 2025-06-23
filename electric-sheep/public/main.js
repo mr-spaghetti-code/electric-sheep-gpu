@@ -13,7 +13,7 @@ const FractalFunctions = window.FractalFunctions || await import('./fractal_func
 class Config {
   // Extended buffer size to accommodate new parameters
   // Must be a multiple of 16 bytes for WebGPU alignment requirements
-  buffer = new ArrayBuffer(80)  // Increased from 64 to 80 bytes
+  buffer = new ArrayBuffer(84)  // Increased from 80 to 84 bytes
 
   _origin = new Float32Array(this.buffer, 0, 2)
   get x()      { return this._origin[0] }
@@ -68,6 +68,11 @@ class Config {
   _animationSpeed = new Float32Array(this.buffer, 60, 1)
   get animationSpeed()      { return this._animationSpeed[0] }
   set animationSpeed(value) { this._animationSpeed[0] = value }
+  
+  // Number of points to generate
+  _numPoints = new Uint32Array(this.buffer, 64, 1)
+  get numPoints()      { return this._numPoints[0] }
+  set numPoints(value) { this._numPoints[0] = value }
 }
 
 class StructWithFlexibleArrayElement {
@@ -1119,7 +1124,7 @@ const init = async (canvas, starts_running = true) => {
   })
   const configBuffer = device.createBuffer({
     label: 'FLAM3 > Buffer > Configuration',
-    size: 80, // Must be a multiple of 16 bytes for WebGPU alignment requirements
+    size: 84, // Must be a multiple of 16 bytes for WebGPU alignment requirements
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
   })
   const cmapBuffer = device.createBuffer({
@@ -1247,6 +1252,7 @@ const init = async (canvas, starts_running = true) => {
   config.satShift = 0
   config.lightShift = 0
   config.animationSpeed = 1.0  // 100% speed by default
+  config.numPoints = 30000  // Default number of points
 
   const fractal = new Fractal
   //fractal.add({ variation: 'Sinusoidal', color: 0, a: 0.5, b:  0.0, c:  0.5, d:  0.0, e: 0.5, f:  0.5 })
@@ -1642,7 +1648,7 @@ const init = async (canvas, starts_running = true) => {
       })
       passEncoder.setBindGroup(0, fractalBindGroup)
       passEncoder.setPipeline(addPointsPipeline)
-      passEncoder.dispatchWorkgroups(30000)
+      passEncoder.dispatchWorkgroups(config.numPoints)
       passEncoder.end()
     })
 
@@ -2149,6 +2155,7 @@ const init = async (canvas, starts_running = true) => {
   config.mirrorX = false;
   config.mirrorY = false;
   config.animationSpeed = 1.0;
+  config.numPoints = 30000;
   
   // When initialized, clear the histogram to ensure crisp rendering
   should_clear_histogram = true;

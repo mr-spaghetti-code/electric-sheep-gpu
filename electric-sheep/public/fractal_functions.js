@@ -149,7 +149,14 @@ class FractalFunctions {
     this.final = Math.floor(Math.random() * (this.funcs.length + 1)) - 1;
     this.cfinal = Math.floor(Math.random() * (this.funcs.length + 1)) - 1;
     this.zoom = 1;
-    this.rot = Math.floor(Math.random() * 20) + 1;
+    
+    // Weighted rotation: favor lower values, occasionally go higher
+    // Use a power function to bias towards lower values
+    const randomValue = Math.random();
+    // Apply cubic root to bias heavily towards lower values
+    const biasedValue = Math.pow(randomValue, 3);
+    this.rot = Math.floor(biasedValue * 20) + 1;
+    
     this.mirrorX = false;
     this.mirrorY = false;
     

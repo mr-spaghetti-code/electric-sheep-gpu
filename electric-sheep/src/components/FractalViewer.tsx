@@ -40,6 +40,7 @@ interface FractalConfig {
   lightShift: number;
   final: number;
   cfinal: number;
+  numPoints: number;
 }
 
 interface FractalInstance {
@@ -101,6 +102,7 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
   const [hueShift, setHueShift] = useState(0);
   const [satShift, setSatShift] = useState(0);
   const [lightShift, setLightShift] = useState(0);
+  const [numPoints, setNumPoints] = useState(30000);
   const [availableTransforms, setAvailableTransforms] = useState<Array<{id: number, name: string}>>([]);
   
   // GIF export state
@@ -339,6 +341,7 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
                 setZoomLevel(config.zoom);
                 setFinalXform(config.final);
                 setCfinalXform(config.cfinal);
+                setNumPoints(config.numPoints || 30000);
               }
             }
             
@@ -430,6 +433,7 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
         setZoomLevel(config.zoom);
         setFinalXform(config.final);
         setCfinalXform(config.cfinal);
+        setNumPoints(config.numPoints || 30000);
         
         // Update animation state
         if (window.flam3.hasActiveAnimations) {
@@ -607,6 +611,15 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
     setCfinalXform(cfinal);
     if (window.flam3 && window.flam3.config) {
       window.flam3.config.cfinal = cfinal;
+      window.flam3.updateParams();
+    }
+  };
+
+  const handleNumPointsChange = (value: number[]) => {
+    const points = value[0];
+    setNumPoints(points);
+    if (window.flam3 && window.flam3.config) {
+      window.flam3.config.numPoints = points;
       window.flam3.updateParams();
     }
   };
@@ -867,6 +880,23 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
                           className="flex-1"
                         />
                         <Badge variant="secondary">{gamma.toFixed(1)}</Badge>
+                      </div>
+                    </div>
+
+                    <Separator />
+
+                    <div className="space-y-2">
+                      <Label className="text-sm">Number of Points</Label>
+                      <div className="flex items-center gap-4">
+                        <Slider
+                          value={[numPoints]}
+                          onValueChange={handleNumPointsChange}
+                          min={5000}
+                          max={30000}
+                          step={5000}
+                          className="flex-1"
+                        />
+                        <Badge variant="secondary">{Math.round(numPoints / 1000)}K</Badge>
                       </div>
                     </div>
                   </CardContent>
