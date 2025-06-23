@@ -1,15 +1,12 @@
 import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { 
   Sparkles, 
-  Zap, 
-  Palette, 
-  Download, 
   Globe,
-  Monitor,
-  Cpu
+  FileText,
+  ExternalLink,
+  Users
 } from 'lucide-react';
 
 const About: React.FC = () => {
@@ -20,7 +17,7 @@ const About: React.FC = () => {
         <div className="text-center space-y-4">
           <div className="flex items-center justify-center gap-3">
             <Sparkles className="w-8 h-8 text-primary" />
-            <h1 className="text-4xl font-bold">Electric Sheep</h1>
+            <h1 className="text-4xl font-bold">FractalMachine.xyz</h1>
             <Sparkles className="w-8 h-8 text-primary" />
           </div>
           <p className="text-xl text-muted-foreground">
@@ -38,117 +35,166 @@ const About: React.FC = () => {
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-muted-foreground leading-relaxed">
-              Electric Sheep is a cutting-edge web application that brings the mesmerizing world of 
-              fractal flames to your browser using WebGPU technology. Inspired by the original 
-              Electric Sheep screensaver, this project renders beautiful, ever-evolving fractal 
-              patterns in real-time with hardware acceleration.
+              FractalMachine.xyz is a web application that brings the mesmerizing world of 
+              fractal flames to your browser using WebGPU. Inspired by the original 
+              Electric Sheep screensaver created by Scott Draves, this project renders beautiful, 
+              ever-evolving fractal patterns in real-time with hardware acceleration.
             </p>
             <p className="text-muted-foreground leading-relaxed">
-              The application uses advanced mathematical algorithms to generate complex, organic-looking 
-              patterns that seem to dance and flow across your screen. Each fractal is unique and can 
-              be customized through various parameters including transforms, color palettes, and animation settings.
+              Unlike traditional fractals, fractal flames are a kind of digital artwork that is grown, 
+              not drawn. Each flame is defined entirely by its rule set, so a tiny preset can render 
+              a wall-sized image or an infinite HD animation without losing detail.
             </p>
           </CardContent>
         </Card>
 
-        {/* Features */}
+        {/* What's a Fractal Flame */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Zap className="w-5 h-5" />
-              Key Features
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="flex items-start gap-3">
-                <Monitor className="w-5 h-5 mt-0.5 text-primary" />
-                <div>
-                  <h3 className="font-semibold">WebGPU Acceleration</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Hardware-accelerated rendering for smooth, real-time performance
-                  </p>
-                </div>
-              </div>
-              
-              <div className="flex items-start gap-3">
-                <Palette className="w-5 h-5 mt-0.5 text-primary" />
-                <div>
-                  <h3 className="font-semibold">Dynamic Color Palettes</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Multiple color schemes with real-time adjustments
-                  </p>
-                </div>
-              </div>
-              
-              <div className="flex items-start gap-3">
-                <Sparkles className="w-5 h-5 mt-0.5 text-primary" />
-                <div>
-                  <h3 className="font-semibold">Interactive Controls</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Fine-tune parameters and watch changes in real-time
-                  </p>
-                </div>
-              </div>
-              
-              <div className="flex items-start gap-3">
-                <Download className="w-5 h-5 mt-0.5 text-primary" />
-                <div>
-                  <h3 className="font-semibold">Export Capabilities</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Save your creations as PNG images or animated GIFs
-                  </p>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Technology Stack */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Cpu className="w-5 h-5" />
-              Technology Stack
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-2">
-              <Badge variant="secondary">React</Badge>
-              <Badge variant="secondary">TypeScript</Badge>
-              <Badge variant="secondary">WebGPU</Badge>
-              <Badge variant="secondary">Tailwind CSS</Badge>
-              <Badge variant="secondary">Vite</Badge>
-              <Badge variant="secondary">Radix UI</Badge>
-              <Badge variant="secondary">Lucide Icons</Badge>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* How It Works */}
-        <Card>
-          <CardHeader>
-            <CardTitle>How Fractal Flames Work</CardTitle>
+            <CardTitle>What's a "Fractal Flame"?</CardTitle>
             <CardDescription>
               Understanding the mathematics behind the beauty
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-muted-foreground leading-relaxed">
-              Fractal flames are a type of iterated function system that creates complex, 
-              organic-looking images through mathematical transformations. The algorithm works by:
+              A fractal flame is a kind of digital artwork grown, not drawn. It starts with a handful 
+              of simple math rules—little formulas that bend, twist, and stretch points in 2-D space. 
+              A computer plays a "chaos game," tossing a random dart into the plane, running it through 
+              one of those rules, plotting the new location, then repeating millions of times. Over time 
+              the dots settle onto a delicate, self-repeating shape called an <em>attractor</em>.
             </p>
-            <ol className="list-decimal list-inside space-y-2 text-muted-foreground ml-4">
-              <li>Starting with a random point in 2D space</li>
-              <li>Applying a series of mathematical transformations (functions)</li>
-              <li>Collecting millions of these transformed points</li>
-              <li>Mapping the density of points to colors and brightness</li>
-              <li>Rendering the final image with smooth gradients and vibrant colors</li>
-            </ol>
-            <p className="text-muted-foreground leading-relaxed">
-              The "flame" aspect comes from the way colors flow and blend, creating patterns 
-              that resemble flames, organic growth, or flowing water.
-            </p>
+            
+            <h3 className="text-lg font-semibold mt-6 mb-4">Three clever twists that make flames glow</h3>
+            
+            <div className="space-y-4">
+              <div className="border-l-4 border-primary pl-4">
+                <h4 className="font-semibold text-primary">1. Wild (non-linear) moves</h4>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Instead of sticking to straight-line transforms, the algorithm mixes in dozens of 
+                  non-linear "variations" like <em>swirl</em>, <em>spherical</em>, or <em>popcorn</em>. 
+                  Each variation warps the attractor in its own signature way, producing everything 
+                  from feathery wisps to crystalline webs.
+                </p>
+              </div>
+              
+              <div className="border-l-4 border-primary pl-4">
+                <h4 className="font-semibold text-primary">2. Log-density brightness</h4>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Every time a pixel is hit, the algorithm increments a counter. Taking the 
+                  <em>logarithm</em> of those counts turns a huge range of hit-counts into smooth 
+                  brightness levels, revealing fine structure that would otherwise be blown out 
+                  or lost in shadow.
+                </p>
+              </div>
+              
+              <div className="border-l-4 border-primary pl-4">
+                <h4 className="font-semibold text-primary">3. Structural coloring</h4>
+                <p className="text-sm text-muted-foreground mt-1">
+                  A hidden color coordinate rides along with each point. As different rules fire, 
+                  the color blends and eventually lands on the canvas with the point, so hues trace 
+                  the geometry of the flame instead of just painting it afterward.
+                </p>
+              </div>
+            </div>
+            
+            <div className="bg-muted/50 p-4 rounded-lg mt-6">
+              <h4 className="font-semibold mb-2">The result</h4>
+              <p className="text-sm text-muted-foreground">
+                Combine those twists with a touch of anti-aliasing and motion blur, and the computer 
+                "grows" luminous, smoke-like patterns that feel both organic and other-worldly—what 
+                artist/creator Scott Draves dubbed <em>fractal flames</em>.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+
+
+        {/* Resources */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="w-5 h-5" />
+              Learn More
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              <a 
+                href="/flame_draves.pdf" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 text-primary hover:underline"
+              >
+                <FileText className="w-4 h-4" />
+                The Fractal Flame Algorithm (PDF)
+                <ExternalLink className="w-3 h-3" />
+              </a>
+              <a 
+                href="https://en.wikipedia.org/wiki/Fractal_flame" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 text-primary hover:underline"
+              >
+                <Globe className="w-4 h-4" />
+                Fractal Flame on Wikipedia
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Credits */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="w-5 h-5" />
+              Credits & Acknowledgments
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-3">
+              <div>
+                <h3 className="font-semibold">Scott Draves</h3>
+                <p className="text-sm text-muted-foreground mb-1">
+                  Creator of the fractal flame algorithm and the original Electric Sheep screensaver
+                </p>
+                <a 
+                  href="https://scottdraves.com/" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline text-sm flex items-center gap-1"
+                >
+                  Visit Scott's website
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+              
+              <Separator />
+              
+              <div>
+                <h3 className="font-semibold">Ignacio Esteban Losiggio</h3>
+                <p className="text-sm text-muted-foreground">
+                  Original prototype implementation using WebGPU
+                </p>
+              </div>
+              
+              <Separator />
+              
+              <div>
+                <h3 className="font-semibold">Project Developer</h3>
+                <a 
+                  href="https://github.com/mr-spaghetti-code/" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline text-sm flex items-center gap-1"
+                >
+                  GitHub Profile
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
@@ -157,8 +203,25 @@ const About: React.FC = () => {
         {/* Footer */}
         <div className="text-center text-sm text-muted-foreground">
           <p>
-            Built with ❤️ using modern web technologies • 
-            WebGPU required for optimal performance
+            Built with love by{' '}
+            <a 
+              href="https://www.joao.contact" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-primary hover:underline"
+            >
+              João Fiadeiro Wenzel
+            </a>
+            {' '}•{' '}
+            <a 
+              href="https://www.x.com/jay_wooow" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-primary hover:underline"
+            >
+              @jay_wooow
+            </a>
+            {' '}• WebGPU required for optimal performance
           </p>
         </div>
       </div>
