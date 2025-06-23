@@ -22,18 +22,51 @@ import {
   ZoomIn,
   Palette,
   Settings2,
-  Plus
+  Plus,
+  Film,
+  Loader2
 } from 'lucide-react';
 import './FractalViewer.css';
 
+interface FractalConfig {
+  animationSpeed: number;
+  zoom: number;
+  rotation: number;
+  mirrorX: boolean;
+  mirrorY: boolean;
+  gamma: number;
+  hueShift: number;
+  satShift: number;
+  lightShift: number;
+  final: number;
+  cfinal: number;
+}
+
+interface FractalInstance {
+  config: FractalConfig;
+  fractal: { length: number; [key: number]: { variation: string } };
+  exportPNG: () => void;
+  exportGIF: (progressCallback: (current: number, total: number, status?: string) => void) => Promise<void>;
+  randomize: () => void;
+  toggleAnimations: (enabled?: boolean) => boolean;
+  hasActiveAnimations: () => boolean;
+  gui: boolean;
+  updateParams: () => void;
+  cmap: string;
+  start: () => void;
+  stop: () => void;
+  step: () => void;
+  clear: () => void;
+}
+
 declare global {
   interface Window {
-    flam3: any;
-    config: any;
-    cmaps: any;
-    FractalFunctions: any;
-    init: any;
-    populateVariationOptions: any;
+    flam3: FractalInstance;
+    config: FractalConfig;
+    cmaps: Record<string, unknown>;
+    FractalFunctions: unknown;
+    init: (canvas: HTMLCanvasElement, startRunning?: boolean) => Promise<FractalInstance>;
+    populateVariationOptions: () => void;
     fractalModuleLoaded: boolean;
   }
 }
@@ -69,6 +102,14 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
   const [satShift, setSatShift] = useState(0);
   const [lightShift, setLightShift] = useState(0);
   const [availableTransforms, setAvailableTransforms] = useState<Array<{id: number, name: string}>>([]);
+  
+  // GIF export state
+  const [isExportingGif, setIsExportingGif] = useState(false);
+  const [gifExportProgress, setGifExportProgress] = useState<{current: number, total: number, status: string}>({
+    current: 0,
+    total: 0,
+    status: ''
+  });
 
   useEffect(() => {
     let script: HTMLScriptElement | null = null;
@@ -208,7 +249,7 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
           }
         }
         attributeChangedCallback(name: string, oldValue: string | null, newValue: string | null) {
-          if ((this.constructor as any).observedAttributes.includes(name)) {
+          if ((this.constructor as typeof HTMLElement & { observedAttributes: string[] }).observedAttributes.includes(name)) {
             if (name === 'variation' && this.shadowRoot) {
               const select = this.shadowRoot.querySelector('select');
               if (select && newValue) select.value = newValue;
@@ -268,7 +309,7 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
 
         // Initialize the fractal viewer
         if (canvasRef.current) {
-          const initFunction = (window as any).init;
+          const initFunction = window.init;
           if (initFunction) {
             const flam3 = await initFunction(canvasRef.current, true);
             window.flam3 = flam3;
@@ -438,6 +479,28 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
   const handleExportPNG = () => {
     if (window.flam3 && window.flam3.exportPNG) {
       window.flam3.exportPNG();
+    }
+  };
+
+  const handleExportGIF = async () => {
+    if (window.flam3 && window.flam3.exportGIF) {
+      setIsExportingGif(true);
+      setGifExportProgress({ current: 0, total: 0, status: 'Starting...' });
+      
+      try {
+        await window.flam3.exportGIF((current: number, total: number, status?: string) => {
+          setGifExportProgress({
+            current,
+            total,
+            status: status || `Frame ${current} of ${total}`
+          });
+        });
+      } catch (error) {
+        console.error('GIF export failed:', error);
+      } finally {
+        setIsExportingGif(false);
+        setGifExportProgress({ current: 0, total: 0, status: '' });
+      }
     }
   };
 
@@ -709,11 +772,36 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
                       Export
                     </CardTitle>
                   </CardHeader>
-                  <CardContent>
-                    <Button onClick={handleExportPNG} className="w-full">
+                  <CardContent className="space-y-2">
+                    <Button onClick={handleExportPNG} className="w-full" variant="outline">
                       <Download className="w-4 h-4 mr-2" />
                       Export as PNG
                     </Button>
+                    <Button 
+                      onClick={handleExportGIF} 
+                      className="w-full" 
+                      disabled={isExportingGif}
+                    >
+                      {isExportingGif ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          {gifExportProgress.status}
+                        </>
+                      ) : (
+                        <>
+                          <Film className="w-4 h-4 mr-2" />
+                          Generate GIF (4s, 12fps)
+                        </>
+                      )}
+                    </Button>
+                    {isExportingGif && gifExportProgress.total > 0 && (
+                      <div className="w-full bg-secondary rounded-full h-2 mt-2">
+                        <div 
+                          className="bg-primary h-2 rounded-full transition-all duration-200" 
+                          style={{ width: `${(gifExportProgress.current / gifExportProgress.total) * 100}%` }}
+                        />
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </TabsContent>

@@ -1878,6 +1878,139 @@ const init = async (canvas, starts_running = true) => {
         console.error('Export error:', error);
         alert('Export failed. Your browser may not support this feature.');
       }
+    },
+    
+    async exportGIF(progressCallback) {
+      try {
+        // Load gif.js if not already loaded
+        if (typeof GIF === 'undefined') {
+          await new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = '/gif.js';
+            script.onload = resolve;
+            script.onerror = reject;
+            document.head.appendChild(script);
+          });
+        }
+
+        // Stop current animation and store state
+        const wasRunning = running;
+        const wasGuiEnabled = flam3.gui;
+        running = false;
+        flam3.gui = false;
+
+        // GIF settings for smaller file size
+        const gifWidth = 512;  // Smaller than canvas for file size
+        const gifHeight = 512;
+        const fps = 12;
+        const duration = 4; // seconds
+        const totalFrames = fps * duration; // 48 frames
+
+        // Create GIF instance
+        const gif = new GIF({
+          workers: 2,
+          quality: 10, // Lower quality for smaller file size
+          width: gifWidth,
+          height: gifHeight,
+          workerScript: '/gif.worker.js'
+        });
+
+        // Create temporary canvas for resizing frames
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = gifWidth;
+        tempCanvas.height = gifHeight;
+        const tempCtx = tempCanvas.getContext('2d');
+
+        // Store original animation state
+        const originalAnimationSpeed = config.animationSpeed;
+        
+        // Set animation speed for smooth GIF (we'll render faster than real-time)
+        config.animationSpeed = 1.0;
+
+        progressCallback && progressCallback(0, totalFrames);
+
+        // Render frames
+        for (let frameIndex = 0; frameIndex < totalFrames; frameIndex++) {
+          // Update progress
+          progressCallback && progressCallback(frameIndex, totalFrames);
+
+          // Render several computation frames to get smooth animation
+          for (let i = 0; i < 3; i++) {
+            frame(performance.now());
+            await new Promise(resolve => setTimeout(resolve, 1));
+          }
+
+          // Capture frame
+          await new Promise((resolve) => {
+            canvas.toBlob((blob) => {
+              if (blob) {
+                const img = new Image();
+                img.onload = () => {
+                  // Clear temp canvas and draw resized image
+                  tempCtx.clearRect(0, 0, gifWidth, gifHeight);
+                  tempCtx.drawImage(img, 0, 0, gifWidth, gifHeight);
+                  
+                  // Add frame to GIF
+                  gif.addFrame(tempCanvas, {
+                    delay: 1000 / fps,
+                    copy: true
+                  });
+                  
+                  URL.revokeObjectURL(img.src);
+                  resolve();
+                };
+                img.src = URL.createObjectURL(blob);
+              } else {
+                resolve();
+              }
+            }, 'image/png');
+          });
+        }
+
+        progressCallback && progressCallback(totalFrames, totalFrames, 'Encoding GIF...');
+
+        // Render GIF
+        gif.on('finished', (blob) => {
+          // Restore states
+          config.animationSpeed = originalAnimationSpeed;
+          flam3.gui = wasGuiEnabled;
+          if (wasRunning) {
+            running = true;
+            requestAnimationFrame(frame);
+          }
+
+          // Download GIF
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `fractal-flame-animated-${Date.now()}.gif`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+
+          progressCallback && progressCallback(totalFrames, totalFrames, 'Complete!');
+        });
+
+        gif.on('progress', (progress) => {
+          progressCallback && progressCallback(totalFrames, totalFrames, `Encoding: ${Math.round(progress * 100)}%`);
+        });
+
+        gif.render();
+
+      } catch (error) {
+        console.error('GIF export error:', error);
+        
+        // Restore states on error
+        flam3.gui = wasGuiEnabled;
+        if (wasRunning) {
+          running = true;
+          requestAnimationFrame(frame);
+        }
+        
+        alert('GIF export failed. Please try again.');
+        progressCallback && progressCallback(0, 0, 'Failed');
+      }
     }
   }
   
