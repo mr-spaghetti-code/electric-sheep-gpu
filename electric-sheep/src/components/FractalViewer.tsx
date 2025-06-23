@@ -79,13 +79,13 @@ interface FractalViewerProps {
 
 const FractalViewer: React.FC<FractalViewerProps> = ({ 
   width = 900, 
-  height = 900 
+  height = 900
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedCmap, setSelectedCmap] = useState('gnuplot');
-  const [animationSpeed, setAnimationSpeed] = useState(1.0);
+  const [animationSpeed, setAnimationSpeed] = useState(0.1);
   const [zoomLevel, setZoomLevel] = useState(0.7);
   const [isRunning, setIsRunning] = useState(true);
   const [guiEnabled, setGuiEnabled] = useState(true);
@@ -112,6 +112,8 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
     total: 0,
     status: ''
   });
+  
+
 
   useEffect(() => {
     let script: HTMLScriptElement | null = null;
@@ -342,6 +344,10 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
                 setFinalXform(config.final);
                 setCfinalXform(config.cfinal);
                 setNumPoints(config.numPoints || 30000);
+                
+                // Apply the UI animation speed to the config
+                config.animationSpeed = animationSpeed;
+                flam3.updateParams();
               }
             }
             
@@ -434,6 +440,10 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
         setFinalXform(config.final);
         setCfinalXform(config.cfinal);
         setNumPoints(config.numPoints || 30000);
+        
+        // Apply the UI animation speed to the config
+        config.animationSpeed = animationSpeed;
+        window.flam3.updateParams();
         
         // Update animation state
         if (window.flam3.hasActiveAnimations) {

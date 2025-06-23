@@ -1251,7 +1251,7 @@ const init = async (canvas, starts_running = true) => {
   config.hueShift = 0
   config.satShift = 0
   config.lightShift = 0
-  config.animationSpeed = 1.0  // 100% speed by default
+  config.animationSpeed = 0.1  // 10% speed by default
   config.numPoints = 30000  // Default number of points
 
   const fractal = new Fractal
@@ -1629,6 +1629,54 @@ const init = async (canvas, starts_running = true) => {
         if (editor.xform.animateX || editor.xform.animateY) {
           hasAnimatedTransforms = true;
           editor.updateAnimation(config.frame)
+        }
+      }
+    }
+    
+    // Fallback animation system for when no GUI editors exist
+    if (gui.length === 0 || !hasAnimatedTransforms) {
+      for (let i = 0; i < fractal.length; i++) {
+        const xform = fractal[i];
+        if (xform.animateX || xform.animateY) {
+          hasAnimatedTransforms = true;
+          
+          // Create animation state if it doesn't exist
+          if (!xform._animationState) {
+            xform._animationState = {
+              originalA: xform.a,
+              originalB: xform.b,
+              originalD: xform.d,
+              originalE: xform.e
+            };
+          }
+          
+          const baseAnimationSpeed = 0.02;
+          const time = config.frame * baseAnimationSpeed * config.animationSpeed;
+          
+          if (xform.animateX) {
+            const radius = Math.sqrt(xform._animationState.originalA * xform._animationState.originalA + 
+                                   xform._animationState.originalD * xform._animationState.originalD);
+            const originalAngle = Math.atan2(xform._animationState.originalD, xform._animationState.originalA);
+            const angle = originalAngle + time;
+            
+            xform.a = Number((radius * Math.cos(angle)).toFixed(6));
+            xform.d = Number((radius * Math.sin(angle)).toFixed(6));
+          }
+          
+          if (xform.animateY) {
+            const radius = Math.sqrt(xform._animationState.originalB * xform._animationState.originalB + 
+                                   xform._animationState.originalE * xform._animationState.originalE);
+            const originalAngle = Math.atan2(xform._animationState.originalE, xform._animationState.originalB);
+            const angle = originalAngle + time;
+            
+            xform.b = Number((radius * Math.cos(angle)).toFixed(6));
+            xform.e = Number((radius * Math.sin(angle)).toFixed(6));
+          }
+        } else {
+          // Clear animation state when not animating
+          if (xform._animationState) {
+            delete xform._animationState;
+          }
         }
       }
     }
