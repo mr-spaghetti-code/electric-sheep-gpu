@@ -20,6 +20,8 @@ import {
 } from 'lucide-react';
 
 interface FractalConfig {
+  x: number;
+  y: number;
   animationSpeed: number;
   zoom: number;
   rotation: number;
@@ -61,6 +63,12 @@ interface HandControlState {
   leftHandRotation: number;
   rightHandRotation: number;
   originalTransforms: Map<number, ExtendedFractalTransform>;
+  leftPinching: boolean;
+  rightPinching: boolean;
+  leftPinchStart: { x: number; y: number } | null;
+  rightPinchStart: { x: number; y: number } | null;
+  originalZoom: number;
+  originalPan: { x: number; y: number };
 }
 
 interface FractalInstance {
@@ -112,11 +120,23 @@ const FullScreenViewer: React.FC = () => {
     rightHandCenter: null,
     leftHandRotation: 0,
     rightHandRotation: 0,
-    originalTransforms: new Map()
+    originalTransforms: new Map(),
+    leftPinching: false,
+    rightPinching: false,
+    leftPinchStart: null,
+    rightPinchStart: null,
+    originalZoom: 1,
+    originalPan: { x: 0, y: 0 }
   });
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const handsRef = useRef<Hands | null>(null);
+  const handControlRef = useRef(handControl);
+
+  // Update ref whenever handControl state changes
+  useEffect(() => {
+    handControlRef.current = handControl;
+  }, [handControl]);
 
   // Get viewport dimensions and calculate square canvas size
   const [canvasSize, setCanvasSize] = useState(() => {
@@ -353,9 +373,80 @@ const FullScreenViewer: React.FC = () => {
     const leftRotation = leftHand ? getHandRotation(leftHand) : 0;
     const rightRotation = rightHand ? getHandRotation(rightHand) : 0;
 
+    // Detect pinch gestures
+    const leftPinch = leftHand ? isPinching(leftHand) : false;
+    const rightPinch = rightHand ? isPinching(rightHand) : false;
+
+    // Handle left hand pinch for zoom control
+    if (leftPinch && leftCenter) {
+      if (!handControlRef.current.leftPinching) {
+        // Start pinching - store initial state
+        setHandControl(prev => ({
+          ...prev,
+          leftPinching: true,
+          leftPinchStart: leftCenter,
+          originalZoom: window.flam3?.config?.zoom || 1
+        }));
+      } else if (handControlRef.current.leftPinchStart && window.flam3?.config) {
+        // Continue pinching - adjust zoom based on Y movement
+        const deltaY = leftCenter.y - handControlRef.current.leftPinchStart.y;
+        // Use exponential scaling similar to mouse wheel: up = zoom in, down = zoom out
+        const zoomMultiplier = Math.exp(-deltaY * 5); // Increased sensitivity
+        const newZoom = handControlRef.current.originalZoom * zoomMultiplier;
+        
+        // Apply zoom with clamping (same as mouse wheel in main.js)
+        window.flam3.config.zoom = Math.max(0.01, Math.min(50, newZoom));
+        window.flam3.clear();
+      }
+    } else if (handControlRef.current.leftPinching) {
+      // Stop pinching
+      setHandControl(prev => ({
+        ...prev,
+        leftPinching: false,
+        leftPinchStart: null
+      }));
+    }
+
+    // Handle right hand pinch for pan control
+    if (rightPinch && rightCenter) {
+      if (!handControlRef.current.rightPinching) {
+        // Start pinching - store initial state
+        const currentX = (window.flam3?.config as any)?.x || 0;
+        const currentY = (window.flam3?.config as any)?.y || 0;
+        setHandControl(prev => ({
+          ...prev,
+          rightPinching: true,
+          rightPinchStart: rightCenter,
+          originalPan: { 
+            x: currentX, 
+            y: currentY 
+          }
+        }));
+      } else if (handControlRef.current.rightPinchStart && window.flam3?.config) {
+        // Continue pinching - adjust pan based on XY movement
+        // Scale similar to pointer movement in main.js
+        const deltaX = (rightCenter.x - handControlRef.current.rightPinchStart.x) * 4; // Increased sensitivity
+        const deltaY = (rightCenter.y - handControlRef.current.rightPinchStart.y) * 4;
+        
+        // Apply pan offset similar to main.js pointer_move
+        const newX = handControlRef.current.originalPan.x + deltaX / window.flam3.config.zoom;
+        const newY = handControlRef.current.originalPan.y - deltaY / window.flam3.config.zoom; // Flip Y for natural movement
+        (window.flam3.config as any).x = newX;
+        (window.flam3.config as any).y = newY;
+        window.flam3.clear();
+      }
+    } else if (handControlRef.current.rightPinching) {
+      // Stop pinching
+      setHandControl(prev => ({
+        ...prev,
+        rightPinching: false,
+        rightPinchStart: null
+      }));
+    }
+
     // Update left hand controlled xform
     if (handControl.leftXform !== null && leftCenter && window.flam3.fractal[handControl.leftXform]) {
-      const xform = window.flam3.fractal[handControl.leftXform] as any;
+      const xform = window.flam3.fractal[handControl.leftXform] as ExtendedFractalTransform;
       const original = handControl.originalTransforms.get(handControl.leftXform);
       
       if (original) {
@@ -378,7 +469,7 @@ const FullScreenViewer: React.FC = () => {
 
     // Update right hand controlled xform
     if (handControl.rightXform !== null && rightCenter && window.flam3.fractal[handControl.rightXform]) {
-      const xform = window.flam3.fractal[handControl.rightXform] as any;
+      const xform = window.flam3.fractal[handControl.rightXform] as ExtendedFractalTransform;
       const original = handControl.originalTransforms.get(handControl.rightXform);
       
       if (original) {
@@ -435,6 +526,21 @@ const FullScreenViewer: React.FC = () => {
     return Math.atan2(dy, dx);
   };
 
+  // Helper function to detect pinch gesture
+  const isPinching = (landmarks: NormalizedLandmark[]) => {
+    // Calculate distance between thumb tip (4) and index finger tip (8)
+    const thumbTip = landmarks[4];
+    const indexTip = landmarks[8];
+    
+    const distance = Math.hypot(
+      thumbTip.x - indexTip.x,
+      thumbTip.y - indexTip.y,
+      thumbTip.z - indexTip.z
+    );
+    
+    return distance < 0.06; // Pinch threshold from the example
+  };
+
   // Select random xforms for hand control
   const selectRandomXforms = () => {
     if (!window.flam3?.fractal || window.flam3.fractal.length < 2) return;
@@ -455,7 +561,7 @@ const FullScreenViewer: React.FC = () => {
     const originalTransforms = new Map();
     
     [leftXform, rightXform].forEach(index => {
-      const xform = window.flam3.fractal[index] as any;
+      const xform = window.flam3.fractal[index] as ExtendedFractalTransform;
       originalTransforms.set(index, {
         variation: xform.variation,
         animateX: xform.animateX,
@@ -616,7 +722,13 @@ const FullScreenViewer: React.FC = () => {
         rightHandCenter: null,
         leftHandRotation: 0,
         rightHandRotation: 0,
-        originalTransforms: new Map()
+        originalTransforms: new Map(),
+        leftPinching: false,
+        rightPinching: false,
+        leftPinchStart: null,
+        rightPinchStart: null,
+        originalZoom: 1,
+        originalPan: { x: 0, y: 0 }
       });
     }
   };
@@ -840,6 +952,12 @@ const FullScreenViewer: React.FC = () => {
                       <p>Right Hand → XForm {handControl.rightXform + 1}</p>
                     )}
                     <p>Move hands to control position & rotation</p>
+                    <div className="text-cyan-400 text-xs mt-2">
+                      <p>• Left hand pinch + up/down = Zoom</p>
+                      <p>• Right hand pinch + move = Pan</p>
+                      {handControl.leftPinching && <p className="text-yellow-400">🤏 Left hand pinching (zoom)</p>}
+                      {handControl.rightPinching && <p className="text-yellow-400">🤏 Right hand pinching (pan)</p>}
+                    </div>
                   </div>
                 )}
               </div>
