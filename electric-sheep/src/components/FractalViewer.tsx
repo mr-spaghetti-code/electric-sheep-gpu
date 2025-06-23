@@ -68,6 +68,7 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
   const [hueShift, setHueShift] = useState(0);
   const [satShift, setSatShift] = useState(0);
   const [lightShift, setLightShift] = useState(0);
+  const [availableTransforms, setAvailableTransforms] = useState<Array<{id: number, name: string}>>([]);
 
   useEffect(() => {
     let script: HTMLScriptElement | null = null;
@@ -77,6 +78,9 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
     template.id = 'xform-editor-template';
     template.innerHTML = `
       <style>
+        :host {
+          color: #f8fafc;
+        }
         .editor-element {
           display: block;
           margin-top: 0.8em;
@@ -84,10 +88,10 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
         .vector {
           vertical-align: middle;
           display: inline-block;
-          border: 1px solid rgba(0, 0, 0, 0.2);
+          border: 1px solid #475569;
           border-radius: 0.375rem;
           padding: 0.25rem;
-          background: rgba(0, 0, 0, 0.05);
+          background: #1e293b;
         }
         .affine-transform {
           min-width: 200px;
@@ -96,7 +100,7 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
         .vector td {
           text-align: right;
           padding: 0.25rem 0.5rem;
-          color: black;
+          color: #f8fafc;
           font-family: monospace;
           font-weight: 600;
         }
@@ -105,23 +109,28 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
           margin-top: 1rem;
         }
         select, input[type="range"] {
-          background: white;
-          border: 1px solid rgba(0, 0, 0, 0.2);
-          color: black;
+          background: #0f172a;
+          border: 1px solid #475569;
+          color: #f8fafc;
           padding: 0.375rem 0.75rem;
           border-radius: 0.375rem;
           margin-left: 0.5rem;
         }
         select:hover, input[type="range"]:hover {
-          background: rgba(0, 0, 0, 0.05);
+          background: #1e293b;
+          border-color: #64748b;
+        }
+        select:focus, input[type="range"]:focus {
+          outline: 2px solid #3b82f6;
+          border-color: #3b82f6;
         }
         label {
-          color: black;
+          color: #f8fafc;
           font-size: 0.875rem;
           font-weight: 500;
         }
         i {
-          color: black;
+          color: #f8fafc;
           font-style: normal;
           font-weight: 600;
         }
@@ -141,6 +150,7 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
           margin-right: 0.5rem;
           width: 1rem;
           height: 1rem;
+          accent-color: #3b82f6;
         }
       </style>
       <label class="editor-element">
@@ -272,6 +282,9 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
             if (flam3.randomize) {
               flam3.randomize();
               
+              // Update available transforms
+              updateAvailableTransforms();
+              
               // Sync UI state with the randomized config values
               if (flam3.config) {
                 const config = flam3.config;
@@ -360,6 +373,9 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
     if (window.flam3 && window.flam3.randomize) {
       window.flam3.randomize();
       
+      // Update available transforms
+      updateAvailableTransforms();
+      
       // Sync UI state with the new config values
       if (window.flam3.config) {
         const config = window.flam3.config;
@@ -389,6 +405,20 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
     }
   };
 
+  // Function to update available transforms
+  const updateAvailableTransforms = () => {
+    if (window.flam3 && window.flam3.fractal) {
+      const transforms = [];
+      for (let i = 0; i < window.flam3.fractal.length; i++) {
+        transforms.push({
+          id: i,
+          name: `XForm ${i + 1} (${window.flam3.fractal[i].variation})`
+        });
+      }
+      setAvailableTransforms(transforms);
+    }
+  };
+
   // Check animation state periodically to keep UI in sync
   useEffect(() => {
     if (!isLoading && window.flam3 && window.flam3.hasActiveAnimations) {
@@ -397,6 +427,8 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
         if (hasAnimations !== animationsEnabled) {
           setAnimationsEnabled(hasAnimations);
         }
+        // Also update available transforms
+        updateAvailableTransforms();
       }, 1000); // Check every second
 
       return () => clearInterval(interval);
@@ -494,6 +526,24 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
     setLightShift(l);
     if (window.flam3 && window.flam3.config) {
       window.flam3.config.lightShift = l;
+      window.flam3.updateParams();
+    }
+  };
+
+  const handleFinalXformChange = (value: string) => {
+    const final = parseInt(value, 10);
+    setFinalXform(final);
+    if (window.flam3 && window.flam3.config) {
+      window.flam3.config.final = final;
+      window.flam3.updateParams();
+    }
+  };
+
+  const handleCfinalXformChange = (value: string) => {
+    const cfinal = parseInt(value, 10);
+    setCfinalXform(cfinal);
+    if (window.flam3 && window.flam3.config) {
+      window.flam3.config.cfinal = cfinal;
       window.flam3.updateParams();
     }
   };
@@ -845,24 +895,34 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
                   <CardContent className="space-y-4">
                     <div className="space-y-2">
                       <Label htmlFor="final-xform">Final Transform</Label>
-                      <Select value={finalXform.toString()} onValueChange={(v) => setFinalXform(parseInt(v))}>
+                      <Select value={finalXform.toString()} onValueChange={handleFinalXformChange}>
                         <SelectTrigger id="final-xform">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="-1">None</SelectItem>
+                          {availableTransforms.map(transform => (
+                            <SelectItem key={transform.id} value={transform.id.toString()}>
+                              {transform.name}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>
 
                     <div className="space-y-2">
                       <Label htmlFor="cfinal-xform">Color Final</Label>
-                      <Select value={cfinalXform.toString()} onValueChange={(v) => setCfinalXform(parseInt(v))}>
+                      <Select value={cfinalXform.toString()} onValueChange={handleCfinalXformChange}>
                         <SelectTrigger id="cfinal-xform">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="-1">None</SelectItem>
+                          {availableTransforms.map(transform => (
+                            <SelectItem key={transform.id} value={transform.id.toString()}>
+                              {transform.name}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>

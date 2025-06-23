@@ -21,7 +21,7 @@
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  background: white;
+  background: var(--card);
   border: 1px solid var(--border);
 }
 
@@ -43,7 +43,7 @@
   width: 100%;
   overflow-y: auto;
   height: 100%;
-  background: white;
+  background: var(--card);
   border: 1px solid var(--border);
 }
 
@@ -52,14 +52,51 @@ xform-editor {
   display: block;
   padding: 1rem;
   border-radius: 0.5rem;
-  background: rgba(0, 0, 0, 0.03);
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: var(--muted);
+  border: 1px solid var(--border);
+  color: var(--foreground);
   transition: all 0.2s;
 }
 
 xform-editor:hover {
-  background: rgba(0, 0, 0, 0.05);
-  border-color: rgba(0, 0, 0, 0.2);
+  background: var(--accent);
+  border-color: var(--ring);
+  color: var(--accent-foreground);
+}
+
+/* Ensure all text elements within XForm editors are light */
+xform-editor *,
+xform-editor label,
+xform-editor span,
+xform-editor div,
+xform-editor p {
+  color: var(--foreground) !important;
+}
+
+xform-editor:hover *,
+xform-editor:hover label,
+xform-editor:hover span,
+xform-editor:hover div,
+xform-editor:hover p {
+  color: var(--accent-foreground) !important;
+}
+
+/* Style form elements within XForm editors */
+xform-editor select,
+xform-editor input[type="text"],
+xform-editor input[type="number"] {
+  background: var(--background);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
+  padding: 0.25rem 0.5rem;
+}
+
+xform-editor select:focus,
+xform-editor input[type="text"]:focus,
+xform-editor input[type="number"]:focus {
+  outline: 2px solid var(--ring);
+  border-color: var(--ring);
 }
 
 /* Responsive layout */
@@ -94,19 +131,19 @@ xform-editor:hover {
 
 .fractal-controls-panel::-webkit-scrollbar-track,
 .fractal-xforms-panel::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--muted);
   border-radius: 4px;
 }
 
 .fractal-controls-panel::-webkit-scrollbar-thumb,
 .fractal-xforms-panel::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--ring);
   border-radius: 4px;
 }
 
 .fractal-controls-panel::-webkit-scrollbar-thumb:hover,
 .fractal-xforms-panel::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: var(--primary);
 }
 
 /* Loading animation */
