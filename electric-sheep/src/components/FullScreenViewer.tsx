@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Toggle } from '@/components/ui/toggle';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
+import { Hands, type Results, type NormalizedLandmark } from '@mediapipe/hands';
 import {
   Play,
   Pause,
@@ -14,7 +15,8 @@ import {
   Zap,
   X,
   Settings,
-  Minimize
+  Minimize,
+  Hand
 } from 'lucide-react';
 
 interface FractalConfig {
@@ -32,10 +34,33 @@ interface FractalConfig {
   numPoints: number;
 }
 
+interface ExtendedFractalTransform {
+  variation: string;
+  animateX: boolean;
+  animateY: boolean;
+  a: number;
+  b: number;
+  c: number;
+  d: number;
+  e: number;
+  f: number;
+}
+
 interface FractalTransform {
   variation: string;
   animateX: boolean;
   animateY: boolean;
+}
+
+interface HandControlState {
+  enabled: boolean;
+  leftXform: number | null;
+  rightXform: number | null;
+  leftHandCenter: { x: number; y: number } | null;
+  rightHandCenter: { x: number; y: number } | null;
+  leftHandRotation: number;
+  rightHandRotation: number;
+  originalTransforms: Map<number, ExtendedFractalTransform>;
 }
 
 interface FractalInstance {
@@ -78,7 +103,20 @@ const FullScreenViewer: React.FC = () => {
   const [animationsEnabled, setAnimationsEnabled] = useState(false);
   const [cmapOptions, setCmapOptions] = useState<string[]>([]);
   const [autoRandomize, setAutoRandomize] = useState(false);
-  const [guiEnabled, setGuiEnabled] = useState(true);
+  const [guiEnabled, setGuiEnabled] = useState(false);
+  const [handControl, setHandControl] = useState<HandControlState>({
+    enabled: false,
+    leftXform: null,
+    rightXform: null,
+    leftHandCenter: null,
+    rightHandCenter: null,
+    leftHandRotation: 0,
+    rightHandRotation: 0,
+    originalTransforms: new Map()
+  });
+
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const handsRef = useRef<Hands | null>(null);
 
   // Get viewport dimensions and calculate square canvas size
   const [canvasSize, setCanvasSize] = useState(() => {
@@ -211,6 +249,236 @@ const FullScreenViewer: React.FC = () => {
     };
   }, []);
 
+  // Initialize hand tracking
+  useEffect(() => {
+    const initializeHandTracking = async () => {
+      if (!handControl.enabled) return;
+
+      try {
+        // Get camera access
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { 
+            width: 640, 
+            height: 480,
+            facingMode: 'user'
+          } 
+        });
+        
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play();
+        }
+
+        // Initialize MediaPipe Hands
+        const hands = new Hands({
+          locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
+
+        hands.setOptions({
+          maxNumHands: 2,
+          modelComplexity: 1,
+          minDetectionConfidence: 0.5,
+          minTrackingConfidence: 0.5
+        });
+
+        hands.onResults(onHandResults);
+        handsRef.current = hands;
+
+        // Start manual camera processing using requestAnimationFrame
+        const processFrame = async () => {
+          if (videoRef.current && handsRef.current && handControl.enabled) {
+            try {
+              await handsRef.current.send({ image: videoRef.current });
+            } catch (error) {
+              console.error('Error processing frame:', error);
+            }
+            requestAnimationFrame(processFrame);
+          }
+        };
+
+        // Start the frame processing loop once video is ready
+        if (videoRef.current) {
+          videoRef.current.onloadedmetadata = () => {
+            requestAnimationFrame(processFrame);
+          };
+        }
+      } catch (error) {
+        console.error('Error initializing hand tracking:', error);
+      }
+    };
+
+    if (handControl.enabled) {
+      initializeHandTracking();
+    }
+
+    return () => {
+      // Cleanup camera stream
+      if (videoRef.current?.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [handControl.enabled]);
+
+  // Hand tracking results handler
+  const onHandResults = (results: Results) => {
+    if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
+      return;
+    }
+
+    const handedness = results.multiHandedness;
+    let leftHand: NormalizedLandmark[] | null = null;
+    let rightHand: NormalizedLandmark[] | null = null;
+
+    // Identify left and right hands
+    for (let i = 0; i < results.multiHandLandmarks.length; i++) {
+      const handLabel = handedness?.[i]?.label;
+      if (handLabel === 'Left') {
+        leftHand = results.multiHandLandmarks[i];
+      } else if (handLabel === 'Right') {
+        rightHand = results.multiHandLandmarks[i];
+      }
+    }
+
+    updateXformsFromHands(leftHand, rightHand);
+  };
+
+  // Update xforms based on hand positions
+  const updateXformsFromHands = (leftHand: NormalizedLandmark[] | null, rightHand: NormalizedLandmark[] | null) => {
+    if (!window.flam3?.fractal || !handControl.enabled) return;
+
+    // Calculate hand centers and rotations
+    const leftCenter = leftHand ? getHandCenter(leftHand) : null;
+    const rightCenter = rightHand ? getHandCenter(rightHand) : null;
+    const leftRotation = leftHand ? getHandRotation(leftHand) : 0;
+    const rightRotation = rightHand ? getHandRotation(rightHand) : 0;
+
+    // Update left hand controlled xform
+    if (handControl.leftXform !== null && leftCenter && window.flam3.fractal[handControl.leftXform]) {
+      const xform = window.flam3.fractal[handControl.leftXform] as any;
+      const original = handControl.originalTransforms.get(handControl.leftXform);
+      
+      if (original) {
+        // Map hand position to translation (c, f parameters) - flipped axes
+        const translateX = (0.5 - leftCenter.x) * 2; // Flip X direction and convert from [0,1] to [-1,1]
+        const translateY = (0.5 - leftCenter.y) * 2; // Flip Y direction and convert to [-1,1]
+        
+        // Apply rotation to the transform matrix
+        const cos = Math.cos(leftRotation);
+        const sin = Math.sin(leftRotation);
+        
+        xform.a = original.a * cos - original.b * sin;
+        xform.b = original.a * sin + original.b * cos;
+        xform.c = original.c + translateX * 0.5;
+        xform.d = original.d * cos - original.e * sin;
+        xform.e = original.d * sin + original.e * cos;
+        xform.f = original.f + translateY * 0.5;
+      }
+    }
+
+    // Update right hand controlled xform
+    if (handControl.rightXform !== null && rightCenter && window.flam3.fractal[handControl.rightXform]) {
+      const xform = window.flam3.fractal[handControl.rightXform] as any;
+      const original = handControl.originalTransforms.get(handControl.rightXform);
+      
+      if (original) {
+        // Map hand position to translation (c, f parameters) - flipped axes
+        const translateX = (0.5 - rightCenter.x) * 2; // Flip X direction and convert from [0,1] to [-1,1]
+        const translateY = (0.5 - rightCenter.y) * 2; // Flip Y direction and convert to [-1,1]
+        
+        // Apply rotation to the transform matrix
+        const cos = Math.cos(rightRotation);
+        const sin = Math.sin(rightRotation);
+        
+        xform.a = original.a * cos - original.b * sin;
+        xform.b = original.a * sin + original.b * cos;
+        xform.c = original.c + translateX * 0.5;
+        xform.d = original.d * cos - original.e * sin;
+        xform.e = original.d * sin + original.e * cos;
+        xform.f = original.f + translateY * 0.5;
+      }
+    }
+
+    // Update hand control state
+    setHandControl(prev => ({
+      ...prev,
+      leftHandCenter: leftCenter,
+      rightHandCenter: rightCenter,
+      leftHandRotation: leftRotation,
+      rightHandRotation: rightRotation
+    }));
+
+    // Trigger fractal update
+    if (window.flam3.updateParams) {
+      window.flam3.updateParams();
+    }
+  };
+
+  // Helper function to get hand center point
+  const getHandCenter = (landmarks: NormalizedLandmark[]) => {
+    // Use palm center (landmark 0) as the main control point
+    return {
+      x: landmarks[0].x,
+      y: landmarks[0].y
+    };
+  };
+
+  // Helper function to calculate hand rotation
+  const getHandRotation = (landmarks: NormalizedLandmark[]) => {
+    // Calculate rotation based on the vector from wrist to middle finger tip
+    const wrist = landmarks[0];
+    const middleTip = landmarks[12];
+    
+    const dx = middleTip.x - wrist.x;
+    const dy = middleTip.y - wrist.y;
+    
+    return Math.atan2(dy, dx);
+  };
+
+  // Select random xforms for hand control
+  const selectRandomXforms = () => {
+    if (!window.flam3?.fractal || window.flam3.fractal.length < 2) return;
+
+    // Get all available xform indices
+    const indices = Array.from({ length: window.flam3.fractal.length }, (_, i) => i);
+    
+    // Shuffle and pick first two
+    for (let i = indices.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [indices[i], indices[j]] = [indices[j], indices[i]];
+    }
+
+    const leftXform = indices[0];
+    const rightXform = indices[1];
+
+    // Store original transform parameters
+    const originalTransforms = new Map();
+    
+    [leftXform, rightXform].forEach(index => {
+      const xform = window.flam3.fractal[index] as any;
+      originalTransforms.set(index, {
+        variation: xform.variation,
+        animateX: xform.animateX,
+        animateY: xform.animateY,
+        a: xform.a,
+        b: xform.b,
+        c: xform.c,
+        d: xform.d,
+        e: xform.e,
+        f: xform.f
+      });
+    });
+
+    setHandControl(prev => ({
+      ...prev,
+      leftXform,
+      rightXform,
+      originalTransforms
+    }));
+
+    console.log(`Selected xforms for hand control: Left=${leftXform}, Right=${rightXform}`);
+  };
+
   // Check animation state periodically and auto-randomize if enabled
   useEffect(() => {
     if (!isLoading && window.flam3 && window.flam3.hasActiveAnimations) {
@@ -313,6 +581,46 @@ const FullScreenViewer: React.FC = () => {
     }
   };
 
+  const handleToggleHandControl = () => {
+    const newHandControlState = !handControl.enabled;
+    
+    if (newHandControlState) {
+      // Enable hand control and select random xforms
+      selectRandomXforms();
+      setHandControl(prev => ({ ...prev, enabled: true }));
+    } else {
+      // Disable hand control and restore original xforms
+      if (window.flam3?.fractal) {
+        handControl.originalTransforms.forEach((original, index) => {
+          if (window.flam3.fractal[index]) {
+            const xform = window.flam3.fractal[index] as any;
+            xform.a = original.a;
+            xform.b = original.b;
+            xform.c = original.c;
+            xform.d = original.d;
+            xform.e = original.e;
+            xform.f = original.f;
+          }
+        });
+        
+        if (window.flam3.updateParams) {
+          window.flam3.updateParams();
+        }
+      }
+      
+      setHandControl({
+        enabled: false,
+        leftXform: null,
+        rightXform: null,
+        leftHandCenter: null,
+        rightHandCenter: null,
+        leftHandRotation: 0,
+        rightHandRotation: 0,
+        originalTransforms: new Map()
+      });
+    }
+  };
+
   const handleToggleAnimations = (enabled: boolean) => {
     if (window.flam3 && window.flam3.toggleAnimations) {
       const actualState = window.flam3.toggleAnimations(enabled);
@@ -375,6 +683,19 @@ const FullScreenViewer: React.FC = () => {
           }}
         />
       </div>
+
+      {/* Debug video element for hand tracking */}
+      {handControl.enabled && (
+        <video 
+          ref={videoRef} 
+          className="fixed bottom-4 left-4 z-50 w-48 h-36 border-2 border-white/20 rounded-lg bg-black/50" 
+          autoPlay 
+          playsInline 
+          muted
+          width={640}
+          height={480}
+        />
+      )}
 
       {/* Exit button - always visible */}
       {!isLoading && (
@@ -470,6 +791,15 @@ const FullScreenViewer: React.FC = () => {
                   <Settings className="w-4 h-4 mr-2" />
                   {guiEnabled ? 'Interactive GUI On' : 'Interactive GUI Off'}
                 </Toggle>
+
+                <Toggle 
+                  pressed={handControl.enabled} 
+                  onPressedChange={handleToggleHandControl}
+                  className="w-full"
+                >
+                  <Hand className="w-4 h-4 mr-2" />
+                  {handControl.enabled ? 'Hand Control On' : 'Hand Control Off'}
+                </Toggle>
               </div>
 
               <Separator className="bg-white/20" />
@@ -500,6 +830,18 @@ const FullScreenViewer: React.FC = () => {
                 <p>Scroll to zoom • Drag to pan</p>
                 {guiEnabled && <p className="text-blue-400">Interactive GUI: Drag transform rings/lines</p>}
                 {autoRandomize && <p className="text-yellow-400">Auto-randomizing every ~20s</p>}
+                {handControl.enabled && (
+                  <div className="text-green-400">
+                    <p>Hand Control Active</p>
+                    {handControl.leftXform !== null && (
+                      <p>Left Hand → XForm {handControl.leftXform + 1}</p>
+                    )}
+                    {handControl.rightXform !== null && (
+                      <p>Right Hand → XForm {handControl.rightXform + 1}</p>
+                    )}
+                    <p>Move hands to control position & rotation</p>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
