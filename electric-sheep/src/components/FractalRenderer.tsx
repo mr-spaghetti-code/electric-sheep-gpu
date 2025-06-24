@@ -15,6 +15,20 @@ import {
 } from 'lucide-react';
 import type { FractalRecord } from '@/hooks/useFractalStorage';
 
+interface FractalRendererInstance {
+  config: Record<string, unknown>;
+  fractal: Record<string, unknown>;
+  cmap: string;
+  currentColormap?: string;
+  start: () => void;
+  stop: () => void;
+  step: () => void;
+  clear: () => void;
+  updateParams: () => void;
+  gui: boolean;
+  exportPNG?: () => void;
+}
+
 interface FractalRendererProps {
   fractalData: FractalRecord;
   width?: number;
@@ -35,7 +49,7 @@ const FractalRenderer: React.FC<FractalRendererProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [guiEnabled, setGuiEnabled] = useState(false);
-  const flam3InstanceRef = useRef<any>(null);
+  const flam3InstanceRef = useRef<FractalRendererInstance | null>(null);
 
   useEffect(() => {
     let script: HTMLScriptElement | null = null;
@@ -275,11 +289,13 @@ const FractalRenderer: React.FC<FractalRendererProps> = ({
     };
   }, [fractalData]);
 
-  const applyFractalData = async (flam3: any, data: FractalRecord) => {
+  const applyFractalData = async (flam3: FractalRendererInstance, data: FractalRecord) => {
     try {
       // Set colormap
       if (data.colormap && window.cmaps) {
+        console.log('Loading fractal with colormap:', data.colormap);
         flam3.cmap = data.colormap;
+        console.log('Colormap set, engine now reports:', flam3.currentColormap);
       }
 
       // Apply config

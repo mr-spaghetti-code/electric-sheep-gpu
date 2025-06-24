@@ -1789,13 +1789,17 @@ const init = async (canvas, starts_running = true) => {
   // Create a FractalFunctions instance to handle the fractal_example.js functionality
   const fractalFunctions = new FractalFunctions();
   
+  let currentCmapName = 'gnuplot'; // Store the current colormap name
+  
   const flam3 = {
     gui: true,
     fractal,
     config,
     fractalFunctions,
     get isRunning() { return running },
+    get currentColormap() { return currentCmapName },
     set cmap(value) {
+      currentCmapName = value; // Store the name
       cmap.copyFrom(cmaps[value])
       device.queue.writeBuffer(cmapBuffer, 0, cmap.buffer)
       flam3.clear()

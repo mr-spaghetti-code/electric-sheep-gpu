@@ -39,6 +39,7 @@ interface FractalViewerInstance extends FractalInstance {
   exportGIF: (progressCallback: (current: number, total: number, status?: string) => void) => Promise<void>;
   step: () => void;
   updateUIControls?: () => void;
+  currentColormap?: string;
 }
 
 // Interface for XForm from main.js with affine transform properties
@@ -350,6 +351,12 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
                 // Apply the UI animation speed to the config
                 config.animationSpeed = animationSpeed;
                 flam3.updateParams();
+                
+                // Sync the colormap state with what was set by randomize
+                setTimeout(() => {
+                  const currentCmap = getCurrentColormap();
+                  setSelectedCmap(currentCmap);
+                }, 100);
               }
             }
             
@@ -451,6 +458,12 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
         if (window.flam3.hasActiveAnimations) {
           setAnimationsEnabled(window.flam3.hasActiveAnimations());
         }
+        
+        // Sync the colormap state with what was set by randomize
+        setTimeout(() => {
+          const currentCmap = getCurrentColormap();
+          setSelectedCmap(currentCmap);
+        }, 100);
       }
     }
   };
@@ -613,13 +626,35 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
       seed: config.seed,
     };
 
+    // Get the actual current colormap from the engine
+    const currentColormap = getCurrentColormap();
+    
+    console.log('Saving fractal with colormap:', currentColormap, 'React state was:', selectedCmap);
+
     return {
       config: serializableConfig,
       transforms,
-      colormap: selectedCmap,
+      colormap: currentColormap,
       width,
       height,
     };
+  };
+
+  // Function to get the current colormap from the engine
+  const getCurrentColormap = () => {
+    // First try to get from the engine if it supports currentColormap
+    if (window.flam3 && window.flam3.currentColormap) {
+      return window.flam3.currentColormap;
+    }
+    
+    // Try to get the current colormap from the DOM
+    const cmapSelect = document.querySelector('#flam3-cmap') as HTMLSelectElement;
+    if (cmapSelect && cmapSelect.value) {
+      return cmapSelect.value;
+    }
+    
+    // Fallback: use the React state
+    return selectedCmap;
   };
 
   const handleSaveToGallery = () => {
