@@ -60,8 +60,6 @@ declare global {
     config: FractalConfig;
     cmaps: Record<string, unknown>;
     FractalFunctions: unknown;
-    STR_TO_VARIATION_ID: Map<string, number>;
-    VARIATION_ID_TO_STR: Map<number, string>;
     init: (canvas: HTMLCanvasElement, startRunning?: boolean) => Promise<FractalViewerInstance>;
     populateVariationOptions: () => void;
     fractalModuleLoaded: boolean;
@@ -247,85 +245,19 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
         static get observedAttributes() {
           return ['variation', 'color', 'a', 'b', 'c', 'd', 'e', 'f', 'animateX', 'animateY']
         }
-        
         constructor() {
           super();
           const template = document.getElementById('xform-editor-template') as HTMLTemplateElement;
           if (template && template.content) {
             this.attachShadow({mode: 'open'})
               .appendChild(template.content.cloneNode(true));
-            
-            // Populate variation options immediately after shadow DOM is created
-            this.populateVariationOptions();
-            
-            // Set up event handlers to prevent event propagation issues
-            this.setupEventHandlers();
           }
         }
-        
-        populateVariationOptions() {
-          if (!this.shadowRoot) return;
-          
-          const select = this.shadowRoot.querySelector('select[name="variation-selector"]') as HTMLSelectElement;
-          if (select) {
-            // Clear existing options
-            select.innerHTML = '';
-            
-            // Use the actual available variations from the global STR_TO_VARIATION_ID map
-            if (window.STR_TO_VARIATION_ID) {
-              // Get all variation keys and sort them alphabetically
-              const variations = Array.from(window.STR_TO_VARIATION_ID.keys()).sort();
-              
-              for (const variation of variations) {
-                const option = document.createElement('option');
-                option.value = variation;
-                option.textContent = variation;
-                select.appendChild(option);
-              }
-            } else {
-              // Fallback: use only the variations we know are definitely available
-              const fallbackVariations = [
-                'Linear', 'Sinusoidal', 'Spherical', 'Swirl', 'Horseshoe', 'Polar', 
-                'Handkerchief', 'Heart', 'Disc', 'Spiral', 'Hyperbolic', 'Diamond',
-                'Ex', 'Julia', 'Bent', 'Fisheye', 'Exponential', 'Power', 'Cosine',
-                'Eyefish', 'Bubble', 'Cylinder', 'Noise', 'Blur', 'Gaussian',
-                'Arch', 'Tangent', 'Square', 'Rays', 'Blade', 'Secant', 'Twintrian', 'Cross'
-              ];
-              
-              for (const variation of fallbackVariations) {
-                const option = document.createElement('option');
-                option.value = variation;
-                option.textContent = variation;
-                select.appendChild(option);
-              }
-            }
-          }
-        }
-        
-        setupEventHandlers() {
-          if (!this.shadowRoot) return;
-          
-          // Prevent event bubbling that might interfere with dropdown behavior
-          this.shadowRoot.addEventListener('click', (e) => {
-            e.stopPropagation();
-          });
-          
-          this.shadowRoot.addEventListener('mousedown', (e) => {
-            e.stopPropagation();
-          });
-          
-          this.shadowRoot.addEventListener('focus', (e) => {
-            e.stopPropagation();
-          }, true);
-        }
-        
         attributeChangedCallback(name: string, oldValue: string | null, newValue: string | null) {
           if ((this.constructor as typeof HTMLElement & { observedAttributes: string[] }).observedAttributes.includes(name)) {
             if (name === 'variation' && this.shadowRoot) {
-              const select = this.shadowRoot.querySelector('select[name="variation-selector"]') as HTMLSelectElement;
-              if (select && newValue) {
-                select.value = newValue;
-              }
+              const select = this.shadowRoot.querySelector('select');
+              if (select && newValue) select.value = newValue;
             } else if (name === 'color' && this.shadowRoot) {
               const input = this.shadowRoot.querySelector('input[name="color"]') as HTMLInputElement;
               if (input && newValue) input.value = newValue;
@@ -336,9 +268,11 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
               const checkbox = this.shadowRoot.querySelector('input[name="animateY"]') as HTMLInputElement;
               if (checkbox) checkbox.checked = newValue === 'true';
             } else if (this.shadowRoot && newValue) {
-              const slot = this.shadowRoot.querySelector(`slot[name="${name}"]`) as HTMLSlotElement;
+              const slot = this.shadowRoot.querySelector(`slot[name="${name}"]`);
               if (slot) slot.textContent = newValue;
             }
+          } else {
+            console.warn(`Unknown attribute ${name} changed from ${oldValue} to ${newValue}`);
           }
         }
       });
@@ -359,14 +293,6 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
           
           // Load and initialize the fractal engine
           import('/main.js').then(module => {
-            // Expose the variation maps globally
-            if (module.STR_TO_VARIATION_ID) {
-              window.STR_TO_VARIATION_ID = module.STR_TO_VARIATION_ID;
-            }
-            if (module.VARIATION_ID_TO_STR) {
-              window.VARIATION_ID_TO_STR = module.VARIATION_ID_TO_STR;
-            }
-            
             window.fractalModuleLoaded = true;
             // Populate variation options after template is loaded
             if (module.populateVariationOptions) {
@@ -565,38 +491,50 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
     }
   }, [isLoading, animationsEnabled]);
 
-  // Initialize XForm editors when the transforms tab becomes visible
+  // Reinitialize XForm editors when the transforms tab becomes visible
   useEffect(() => {
     if (!isLoading && window.flam3) {
-      let hasInitialized = false;
-      
-      const initializeIfNeeded = () => {
-        const xformContainer = document.getElementById('xforms');
-        if (xformContainer && xformContainer.offsetParent !== null && xformContainer.children.length === 0 && !hasInitialized) {
-          hasInitialized = true;
-          // Reinitialize XForm editors
-          setTimeout(() => {
-            if (window.refreshXFormEditorsList) {
-              window.refreshXFormEditorsList();
-            }
-          }, 50);
-        }
-      };
-
-      // Use only a single intersection observer to avoid multiple reinitialization attempts
+      // Add observer to detect when transforms tab content becomes visible
       const xformContainer = document.getElementById('xforms');
       if (xformContainer) {
+        const observer = new MutationObserver(() => {
+          // Check if the container is visible and has no children
+          if (xformContainer.offsetParent !== null && xformContainer.children.length === 0) {
+            // Reinitialize XForm editors
+            setTimeout(() => {
+              if (window.flam3 && window.flam3.updateUIControls) {
+                window.flam3.updateUIControls();
+              }
+                             // Force refresh of XForm editors
+               if (window.refreshXFormEditorsList) {
+                 window.refreshXFormEditorsList();
+               }
+            }, 100);
+          }
+        });
+
+        // Also use an intersection observer to detect visibility changes
         const intersectionObserver = new IntersectionObserver((entries) => {
           entries.forEach((entry) => {
-            if (entry.isIntersecting) {
-              initializeIfNeeded();
+            if (entry.isIntersecting && entry.target.children.length === 0) {
+              // Container is visible but empty - reinitialize
+              setTimeout(() => {
+                if (window.flam3 && window.flam3.updateUIControls) {
+                  window.flam3.updateUIControls();
+                }
+                                 if (window.refreshXFormEditorsList) {
+                   window.refreshXFormEditorsList();
+                 }
+              }, 100);
             }
           });
-        }, { threshold: 0.1 });
+        });
 
+        observer.observe(xformContainer, { childList: true, subtree: true });
         intersectionObserver.observe(xformContainer);
 
         return () => {
+          observer.disconnect();
           intersectionObserver.disconnect();
         };
       }
@@ -822,14 +760,14 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
             defaultValue="controls" 
             className="w-full h-full"
             onValueChange={(value) => {
-              // When transforms tab is selected, initialize XForm editors if needed
+              // When transforms tab is selected, reinitialize XForm editors if they're missing
               if (value === 'transforms') {
                 setTimeout(() => {
                   const xformContainer = document.getElementById('xforms');
                   if (xformContainer && xformContainer.children.length === 0 && window.refreshXFormEditorsList) {
                     window.refreshXFormEditorsList();
                   }
-                }, 50);
+                }, 100);
               }
             }}
           >
@@ -1156,6 +1094,15 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
                       size="sm" 
                       variant="outline"
                       className="gap-2"
+                      onClick={() => {
+                        // Ensure XForm editors are visible before adding
+                        setTimeout(() => {
+                          const xformContainer = document.getElementById('xforms');
+                          if (xformContainer && xformContainer.children.length === 0 && window.refreshXFormEditorsList) {
+                            window.refreshXFormEditorsList();
+                          }
+                        }, 50);
+                      }}
                     >
                       <Plus className="w-4 h-4" />
                       Add Transform
@@ -1165,6 +1112,14 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
                     <div 
                       id="xforms" 
                       className="space-y-4"
+                      onFocus={() => {
+                        // Reinitialize when the container gets focus
+                        setTimeout(() => {
+                          if (window.refreshXFormEditorsList) {
+                            window.refreshXFormEditorsList();
+                          }
+                        }, 10);
+                      }}
                     >
                       {/* XForm editors will be inserted here */}
                     </div>

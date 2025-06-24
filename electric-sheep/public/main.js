@@ -2554,4 +2554,4 @@ if (typeof window !== 'undefined' && !window.fractalModuleLoaded) {
 // Export functions for module usage
 window.init = init;
 window.populateVariationOptions = populateVariationOptions;
-export { init, populateVariationOptions, STR_TO_VARIATION_ID, VARIATION_ID_TO_STR };
+export { init, populateVariationOptions };
