@@ -26,10 +26,12 @@ import {
   Film,
   Loader2,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  Upload
 } from 'lucide-react';
 import './FractalViewer.css';
-import type { FractalConfig, FractalInstance } from '@/types/fractal';
+import type { FractalConfig, FractalInstance, ExtendedFractalTransform } from '@/types/fractal';
+import SaveFractalDialog from './SaveFractalDialog';
 
 // Extend the FractalInstance interface for the FractalViewer specific needs
 interface FractalViewerInstance extends FractalInstance {
@@ -37,6 +39,19 @@ interface FractalViewerInstance extends FractalInstance {
   exportGIF: (progressCallback: (current: number, total: number, status?: string) => void) => Promise<void>;
   step: () => void;
   updateUIControls?: () => void;
+}
+
+// Interface for XForm from main.js with affine transform properties
+interface WebGPUXForm {
+  variation: string;
+  animateX: boolean;
+  animateY: boolean;
+  a: number;
+  b: number;
+  c: number;
+  d: number;
+  e: number;
+  f: number;
 }
 
 declare global {
@@ -95,6 +110,9 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
     total: 0,
     status: ''
   });
+  
+  // Save dialog state
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
   
 
 
@@ -551,6 +569,41 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
     }
   };
 
+  const getCurrentFractalData = () => {
+    if (!window.flam3) {
+      throw new Error('Fractal engine not initialized');
+    }
+
+    // Get transforms data
+    const transforms: ExtendedFractalTransform[] = [];
+    for (let i = 0; i < window.flam3.fractal.length; i++) {
+      const xform = window.flam3.fractal[i] as WebGPUXForm;
+      transforms.push({
+        variation: xform.variation,
+        animateX: xform.animateX,
+        animateY: xform.animateY,
+        a: xform.a,
+        b: xform.b,
+        c: xform.c,
+        d: xform.d,
+        e: xform.e,
+        f: xform.f,
+      });
+    }
+
+    return {
+      config: window.flam3.config,
+      transforms,
+      colormap: selectedCmap,
+      width,
+      height,
+    };
+  };
+
+  const handleSaveToGallery = () => {
+    setShowSaveDialog(true);
+  };
+
   const handleCmapChange = (value: string) => {
     setSelectedCmap(value);
     if (window.flam3) {
@@ -856,6 +909,10 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-2">
+                    <Button onClick={handleSaveToGallery} className="w-full">
+                      <Upload className="w-4 h-4 mr-2" />
+                      Add to Gallery
+                    </Button>
                     <Button onClick={handleExportPNG} className="w-full" variant="outline">
                       <Download className="w-4 h-4 mr-2" />
                       Export as PNG
@@ -1165,6 +1222,16 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
             </Tabs>
           </div>
         )}
+        
+        <SaveFractalDialog
+          isOpen={showSaveDialog}
+          onClose={() => setShowSaveDialog(false)}
+          getCurrentFractalData={getCurrentFractalData}
+          canvas={canvasRef.current || undefined}
+          onSuccess={() => {
+            console.log('Fractal saved successfully!');
+          }}
+        />
     </div>
   );
 };

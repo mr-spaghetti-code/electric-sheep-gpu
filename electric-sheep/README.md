@@ -1,54 +1,93 @@
-# React + TypeScript + Vite
+# Electric Sheep GPU
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A WebGPU-powered fractal flame generator with a public gallery.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- Real-time fractal flame generation using WebGPU
+- Interactive controls for fractal parameters
+- Color palette selection
+- Animation support
+- Export to PNG and GIF
+- Public gallery for sharing creations
 
-## Expanding the ESLint configuration
+## Setup
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default tseslint.config({
-  extends: [
-    // Remove ...tseslint.configs.recommended and replace with this
-    ...tseslint.configs.recommendedTypeChecked,
-    // Alternatively, use this for stricter rules
-    ...tseslint.configs.strictTypeChecked,
-    // Optionally, add this for stylistic rules
-    ...tseslint.configs.stylisticTypeChecked,
-  ],
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
+1. Install dependencies:
+```bash
+npm install
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default tseslint.config({
-  plugins: {
-    // Add the react-x and react-dom plugins
-    'react-x': reactX,
-    'react-dom': reactDom,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended typescript rules
-    ...reactX.configs['recommended-typescript'].rules,
-    ...reactDom.configs.recommended.rules,
-  },
-})
+2. Create a `.env.local` file with your Supabase credentials:
 ```
+VITE_SUPABASE_URL=your-supabase-project-url
+VITE_SUPABASE_ANON_KEY=your-supabase-anon-key
+```
+
+3. Set up your Supabase database with the schema provided in the project documentation.
+
+4. Start the development server:
+```bash
+npm run dev
+```
+
+## Supabase Schema
+
+Create the following table in your Supabase project:
+
+```sql
+-- Fractals table - simple storage for fractal configurations
+CREATE TABLE public.fractals (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  title TEXT NOT NULL DEFAULT 'Untitled Fractal',
+  description TEXT,
+  
+  -- Fractal configuration (from FractalConfig interface)
+  config JSONB NOT NULL,
+  
+  -- Transform data (from Fractal class)
+  transforms JSONB NOT NULL,
+  
+  -- Visual properties
+  colormap TEXT NOT NULL DEFAULT 'gnuplot',
+  width INTEGER NOT NULL DEFAULT 900,
+  height INTEGER NOT NULL DEFAULT 900,
+  
+  -- Generated image data
+  thumbnail_url TEXT,
+  full_image_url TEXT,
+  gif_url TEXT,
+  
+  -- Simple metadata
+  view_count INTEGER DEFAULT 0,
+  
+  -- Timestamps
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+);
+
+-- Indexes for gallery browsing
+CREATE INDEX idx_fractals_created_at ON public.fractals(created_at DESC);
+CREATE INDEX idx_fractals_view_count ON public.fractals(view_count DESC);
+
+-- GIN indexes for searching fractal parameters
+CREATE INDEX idx_fractals_config_gin ON public.fractals USING GIN (config);
+CREATE INDEX idx_fractals_transforms_gin ON public.fractals USING GIN (transforms);
+CREATE INDEX idx_fractals_colormap ON public.fractals(colormap);
+
+-- Disable RLS for public access
+ALTER TABLE public.fractals DISABLE ROW LEVEL SECURITY;
+```
+
+## Usage
+
+1. **Generate Fractals**: Use the controls panel to adjust parameters and create unique fractal patterns
+2. **Save to Gallery**: Click "Add to Gallery" to save your creation to the public database
+3. **Export**: Save your fractals as PNG images or animated GIFs
+
+## Technology Stack
+
+- React + TypeScript
+- WebGPU for real-time rendering
+- Supabase for data storage
+- Vite for build tooling
+- Tailwind CSS + shadcn/ui for styling
