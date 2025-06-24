@@ -86,7 +86,7 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
   const [animationSpeed, setAnimationSpeed] = useState(0.1);
   const [zoomLevel, setZoomLevel] = useState(0.7);
   const [isRunning, setIsRunning] = useState(true);
-  const [guiEnabled, setGuiEnabled] = useState(true);
+  const [guiEnabled, setGuiEnabled] = useState(false);
   const [animationsEnabled, setAnimationsEnabled] = useState(false);
   const [cmapOptions, setCmapOptions] = useState<string[]>([]);
 
