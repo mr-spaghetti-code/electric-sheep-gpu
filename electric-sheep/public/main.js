@@ -73,6 +73,10 @@ class Config {
   _numPoints = new Uint32Array(this.buffer, 64, 1)
   get numPoints()      { return this._numPoints[0] }
   set numPoints(value) { this._numPoints[0] = value }
+
+  _seed = new Uint32Array(this.buffer, 68, 1)
+  get seed()      { return this._seed[0] }
+  set seed(value) { this._seed[0] = value }
 }
 
 class StructWithFlexibleArrayElement {
@@ -301,6 +305,8 @@ struct CanvasConfiguration {
   satShift: f32,
   lightShift: f32,
   animationSpeed: f32,
+  numPoints: u32,
+  seed: u32,
 };
 
 // FIXME: Use a mat3x3
@@ -722,7 +728,7 @@ fn rotate_point(p: vec2<f32>, angle: f32, cx: f32, cy: f32) -> vec2<f32> {
 fn add_points(
   @builtin(global_invocation_id) invocation: vec3<u32>
 ) {
-  seed(hash(config.frame) ^ hash(invocation.x));
+  seed(hash(config.seed) ^ hash(invocation.x));
   var point = vec3<f32>(
     frandom() * 2. - 1.,
     frandom() * 2. - 1.,
@@ -1253,6 +1259,7 @@ const init = async (canvas, starts_running = true) => {
   config.lightShift = 0
   config.animationSpeed = 0.1  // 10% speed by default
   config.numPoints = 30000  // Default number of points
+  config.seed = Math.floor(Math.random() * 2**32)
 
   const fractal = new Fractal
   //fractal.add({ variation: 'Sinusoidal', color: 0, a: 0.5, b:  0.0, c:  0.5, d:  0.0, e: 0.5, f:  0.5 })
@@ -1879,6 +1886,7 @@ const init = async (canvas, starts_running = true) => {
         config.rotation = params.rot;
         config.mirrorX = params.mirrorX;
         config.mirrorY = params.mirrorY;
+        config.seed = Math.floor(Math.random() * 2**32);
         
         // Select a random colormap
         const cmapNames = Object.keys(cmaps);

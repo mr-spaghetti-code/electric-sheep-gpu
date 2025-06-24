@@ -13,12 +13,14 @@ export interface FractalConfig {
   final: number;
   cfinal: number;
   numPoints: number;
+  seed: number;
 }
 
 export interface FractalTransform {
   variation: string;
   animateX: boolean;
   animateY: boolean;
+  color: number;
 }
 
 export interface ExtendedFractalTransform extends FractalTransform {

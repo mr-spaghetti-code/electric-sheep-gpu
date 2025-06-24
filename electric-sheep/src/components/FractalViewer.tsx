@@ -46,6 +46,7 @@ interface WebGPUXForm {
   variation: string;
   animateX: boolean;
   animateY: boolean;
+  color: number;
   a: number;
   b: number;
   c: number;
@@ -574,14 +575,17 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
       throw new Error('Fractal engine not initialized');
     }
 
+    const { config, fractal } = window.flam3;
+
     // Get transforms data
     const transforms: ExtendedFractalTransform[] = [];
-    for (let i = 0; i < window.flam3.fractal.length; i++) {
-      const xform = window.flam3.fractal[i] as WebGPUXForm;
+    for (let i = 0; i < fractal.length; i++) {
+      const xform = fractal[i] as WebGPUXForm;
       transforms.push({
         variation: xform.variation,
         animateX: xform.animateX,
         animateY: xform.animateY,
+        color: xform.color,
         a: xform.a,
         b: xform.b,
         c: xform.c,
@@ -591,8 +595,26 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
       });
     }
 
+    const serializableConfig: FractalConfig = {
+      x: config.x,
+      y: config.y,
+      animationSpeed: config.animationSpeed,
+      zoom: config.zoom,
+      rotation: config.rotation,
+      mirrorX: config.mirrorX,
+      mirrorY: config.mirrorY,
+      gamma: config.gamma,
+      hueShift: config.hueShift,
+      satShift: config.satShift,
+      lightShift: config.lightShift,
+      final: config.final,
+      cfinal: config.cfinal,
+      numPoints: config.numPoints,
+      seed: config.seed,
+    };
+
     return {
-      config: window.flam3.config,
+      config: serializableConfig,
       transforms,
       colormap: selectedCmap,
       width,
