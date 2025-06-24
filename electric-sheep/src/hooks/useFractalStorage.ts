@@ -13,6 +13,22 @@ export interface SaveFractalData {
   canvas?: HTMLCanvasElement; // Add canvas for thumbnail generation
 }
 
+export interface FractalRecord {
+  id: string;
+  title: string;
+  description?: string;
+  config: FractalConfig;
+  transforms: ExtendedFractalTransform[];
+  colormap: string;
+  width: number;
+  height: number;
+  thumbnail_url?: string;
+  full_image_url?: string;
+  gif_url?: string;
+  view_count: number;
+  created_at: string;
+}
+
 // Helper function to generate thumbnail from WebGPU canvas
 const generateThumbnail = (canvas: HTMLCanvasElement, maxSize: number = 256): Promise<Blob> => {
   return new Promise((resolve, reject) => {
@@ -176,5 +192,82 @@ export const useFractalStorage = () => {
     saveFractal,
     isSaving,
     saveError,
+  };
+};
+
+export const useFractalGallery = () => {
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchFractals = async (page: number = 0, limit: number = 10): Promise<FractalRecord[]> => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const { data, error } = await supabase
+        .from('fractals')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .range(page * limit, (page + 1) * limit - 1);
+
+      if (error) {
+        throw error;
+      }
+
+      return data || [];
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch fractals';
+      setError(errorMessage);
+      return [];
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const fetchFractalById = async (id: string): Promise<FractalRecord | null> => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const { data, error } = await supabase
+        .from('fractals')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      return data;
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch fractal';
+      setError(errorMessage);
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const incrementViewCount = async (id: string) => {
+    try {
+      const { error } = await supabase.rpc('increment_view_count', {
+        fractal_id: id
+      });
+
+      if (error) {
+        console.warn('Failed to increment view count:', error);
+      }
+    } catch (err) {
+      console.warn('Failed to increment view count:', err);
+    }
+  };
+
+  return {
+    fetchFractals,
+    fetchFractalById,
+    incrementViewCount,
+    isLoading,
+    error,
   };
 }; 

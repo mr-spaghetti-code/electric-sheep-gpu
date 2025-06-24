@@ -69,6 +69,16 @@ CREATE POLICY "Anyone can delete fractal images" ON storage.objects
     bucket_id IN ('fractal-thumbnails', 'fractal-images', 'fractal-gifs')
   );
 
+-- 7. Create function to increment view count
+CREATE OR REPLACE FUNCTION increment_view_count(fractal_id UUID)
+RETURNS void AS $$
+BEGIN
+  UPDATE public.fractals 
+  SET view_count = view_count + 1 
+  WHERE id = fractal_id;
+END;
+$$ LANGUAGE plpgsql;
+
 -- 6. Sample data (optional - remove if you don't want test data)
 -- INSERT INTO public.fractals (title, description, config, transforms, colormap, width, height) VALUES
 -- (
