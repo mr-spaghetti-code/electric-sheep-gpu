@@ -14,19 +14,12 @@ import {
   Loader2
 } from 'lucide-react';
 import type { FractalRecord } from '@/hooks/useFractalStorage';
+import type { FractalInstance } from '@/types/fractal';
 
-interface FractalRendererInstance {
-  config: Record<string, unknown>;
-  fractal: Record<string, unknown>;
-  cmap: string;
-  currentColormap?: string;
-  start: () => void;
-  stop: () => void;
-  step: () => void;
-  clear: () => void;
-  updateParams: () => void;
-  gui: boolean;
+// Extend the FractalInstance interface for the FractalRenderer specific needs
+interface FractalRendererInstance extends FractalInstance {
   exportPNG?: () => void;
+  currentColormap?: string;
 }
 
 interface FractalRendererProps {
@@ -356,7 +349,7 @@ const FractalRenderer: React.FC<FractalRendererProps> = ({
   };
 
   const handleStep = () => {
-    if (flam3InstanceRef.current) {
+    if (flam3InstanceRef.current && flam3InstanceRef.current.step) {
       flam3InstanceRef.current.step();
     }
   };

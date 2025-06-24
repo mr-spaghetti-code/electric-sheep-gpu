@@ -4,9 +4,19 @@ import About from './components/About';
 import FullScreenViewer from './components/FullScreenViewer';
 import Gallery from './components/Gallery';
 import Navigation from './components/Navigation';
+import MobileWarning from './components/MobileWarning';
+import { useMobileDetection } from './hooks/useMobileDetection';
 import './App.css';
 
 function App() {
+  const { isMobile } = useMobileDetection();
+
+  // Show mobile warning for mobile devices
+  if (isMobile) {
+    return <MobileWarning />;
+  }
+
+  // Show normal app for desktop/tablet users
   return (
     <Router>
       <div className="App min-h-screen bg-background">

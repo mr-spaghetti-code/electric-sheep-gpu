@@ -37,6 +37,7 @@ export interface FractalInstance {
   fractal: { 
     length: number; 
     [key: number]: FractalTransform;
+    add: (transform: ExtendedFractalTransform) => void;
   };
   exportPNG?: () => void;
   exportGIF?: (progressCallback: (current: number, total: number, status?: string) => void) => Promise<void>;
