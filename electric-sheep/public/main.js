@@ -1970,7 +1970,7 @@ const init = async (canvas, starts_running = true) => {
       }
     },
     
-    async exportGIF(progressCallback) {
+    async exportGIF(progressCallback, settings = { duration: 4, quality: 0.3, fps: 25, size: 512 }) {
       try {
         // Load gif.js if not already loaded
         if (typeof GIF === 'undefined') {
@@ -1989,26 +1989,32 @@ const init = async (canvas, starts_running = true) => {
         running = false;
         flam3.gui = false;
 
-        // GIF settings for smaller file size
-        const gifWidth = 512;  // Smaller than canvas for file size
-        const gifHeight = 512;
-        const fps = 25;
-        const totalFrames = 100; // 100 frames at 25 fps (4 second duration)
+        // GIF settings from parameters
+        const { duration, quality, fps, size } = settings;
+        const gifWidth = size;
+        const gifHeight = size;
+        const totalFrames = Math.round(duration * fps);
 
         // Create GIF instance
         const gif = new GIF({
           workers: 2,
-          quality: 10, // Lower quality for smaller file size
+          quality: Math.round((1 - quality) * 10), // Convert 0-1 to 10-0 (GIF.js uses inverted quality scale)
           width: gifWidth,
           height: gifHeight,
           workerScript: '/gif.worker.js'
         });
 
-        // Create temporary canvas for resizing frames
+                // Create temporary canvas for resizing frames
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = gifWidth;
         tempCanvas.height = gifHeight;
         const tempCtx = tempCanvas.getContext('2d');
+
+        // Create analysis canvas for black frame detection
+        const analysisCanvas = document.createElement('canvas');
+        analysisCanvas.width = gifWidth;
+        analysisCanvas.height = gifHeight;
+        const analysisCtx = analysisCanvas.getContext('2d');
 
         // Store original animation state
         const originalAnimationSpeed = config.animationSpeed;
@@ -2016,15 +2022,18 @@ const init = async (canvas, starts_running = true) => {
         // Set animation speed for smooth GIF (we'll render faster than real-time)
         config.animationSpeed = 1.0;
 
+        // Array to store captured frames before processing
+        const capturedFrames = [];
+
         progressCallback && progressCallback(0, totalFrames);
 
-        // Render frames
+        // Render and capture frames
         for (let frameIndex = 0; frameIndex < totalFrames; frameIndex++) {
           // Update progress
-          progressCallback && progressCallback(frameIndex, totalFrames);
+          progressCallback && progressCallback(frameIndex, totalFrames, `Capturing frame ${frameIndex + 1}/${totalFrames}`);
 
           // Render several computation frames to get smooth animation
-          for (let i = 0; i < 3; i++) {
+          for (let i = 0; i < 5; i++) {
             frame(performance.now());
             await new Promise(resolve => setTimeout(resolve, 1));
           }
@@ -2039,24 +2048,85 @@ const init = async (canvas, starts_running = true) => {
                   tempCtx.clearRect(0, 0, gifWidth, gifHeight);
                   tempCtx.drawImage(img, 0, 0, gifWidth, gifHeight);
                   
-                  // Add frame to GIF
-                  gif.addFrame(tempCanvas, {
-                    delay: 1000 / fps,
-                    copy: true
+                  // Store frame data for post-processing
+                  capturedFrames.push({
+                    canvas: tempCanvas,
+                    imageData: tempCtx.getImageData(0, 0, gifWidth, gifHeight)
                   });
                   
                   URL.revokeObjectURL(img.src);
                   resolve();
                 };
+                img.onerror = () => {
+                  console.warn('Failed to load frame image, skipping');
+                  resolve();
+                };
                 img.src = URL.createObjectURL(blob);
               } else {
+                console.warn('Failed to create blob for frame, skipping');
                 resolve();
               }
-            }, 'image/png');
+            }, 'image/jpeg', 0.9); // Use JPEG with 90% quality for better performance
           });
         }
 
-        progressCallback && progressCallback(totalFrames, totalFrames, 'Encoding GIF...');
+        // Post-process frames to remove black frames
+        const validFrames = [];
+        
+        for (let i = 0; i < capturedFrames.length; i++) {
+          progressCallback && progressCallback(totalFrames + i, totalFrames + capturedFrames.length, `Processing frame ${i + 1}/${capturedFrames.length}`);
+          
+          const frameData = capturedFrames[i];
+          const pixels = frameData.imageData.data;
+          const totalPixels = pixels.length / 4; // 4 values per pixel (RGBA)
+          
+          let brightPixelCount = 0;
+          let totalBrightness = 0;
+          
+          // Check each pixel for bright content
+          for (let j = 0; j < pixels.length; j += 4) {
+            const r = pixels[j];
+            const g = pixels[j + 1];
+            const b = pixels[j + 2];
+            const brightness = (r + g + b) / 3;
+            
+            totalBrightness += brightness;
+            
+            // Count pixels that are reasonably bright (fractal flame patterns)
+            if (brightness > 30) {
+              brightPixelCount++;
+            }
+          }
+          
+          const averageBrightness = totalBrightness / totalPixels;
+          const brightPixelRatio = brightPixelCount / totalPixels;
+          
+          // A frame is valid if it has either:
+          // 1. Some bright pixels (indicating fractal content), OR
+          // 2. Reasonable average brightness (not completely black)
+          const hasContent = brightPixelRatio > 0.001 || averageBrightness > 5;
+          
+          if (hasContent) {
+            // Frame is valid, recreate canvas for GIF
+            const validCanvas = document.createElement('canvas');
+            validCanvas.width = gifWidth;
+            validCanvas.height = gifHeight;
+            const validCtx = validCanvas.getContext('2d');
+            validCtx.putImageData(frameData.imageData, 0, 0);
+            validFrames.push(validCanvas);
+          }
+        }
+        
+        // Add valid frames to GIF
+        for (let i = 0; i < validFrames.length; i++) {
+          progressCallback && progressCallback(totalFrames + capturedFrames.length + i, totalFrames + capturedFrames.length + validFrames.length, `Adding frame ${i + 1}/${validFrames.length} to GIF`);
+          gif.addFrame(validFrames[i], {
+            delay: 1000 / fps,
+            copy: true
+          });
+        }
+
+        progressCallback && progressCallback(totalFrames + capturedFrames.length + validFrames.length, totalFrames + capturedFrames.length + validFrames.length, 'Encoding GIF...');
 
         // Render GIF
         gif.on('finished', (blob) => {

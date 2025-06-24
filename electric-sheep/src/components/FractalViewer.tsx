@@ -24,7 +24,7 @@ import {
   Settings2,
   Plus,
   Film,
-  Loader2,
+
   ChevronDown,
   ChevronRight,
   Upload
@@ -32,11 +32,12 @@ import {
 import './FractalViewer.css';
 import type { FractalConfig, FractalInstance, ExtendedFractalTransform } from '@/types/fractal';
 import SaveFractalDialog from './SaveFractalDialog';
+import GifExportDialog from './GifExportDialog';
 
 // Extend the FractalInstance interface for the FractalViewer specific needs
 interface FractalViewerInstance extends FractalInstance {
   exportPNG: () => void;
-  exportGIF: (progressCallback: (current: number, total: number, status?: string) => void) => Promise<void>;
+  exportGIF: (progressCallback: (current: number, total: number, status?: string) => void, settings?: { duration: number; quality: number; fps: number; size: number }) => Promise<void>;
   step: () => void;
   updateUIControls?: () => void;
   currentColormap?: string;
@@ -112,6 +113,7 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
     total: 0,
     status: ''
   });
+  const [showGifExportDialog, setShowGifExportDialog] = useState(false);
   
   // Save dialog state
   const [showSaveDialog, setShowSaveDialog] = useState(false);
@@ -561,7 +563,7 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
     }
   };
 
-  const handleExportGIF = async () => {
+  const handleExportGIF = async (settings: { duration: number; quality: number; fps: number; size: number }) => {
     if (window.flam3 && window.flam3.exportGIF) {
       setIsExportingGif(true);
       setGifExportProgress({ current: 0, total: 0, status: 'Starting...' });
@@ -573,7 +575,7 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
             total,
             status: status || `Frame ${current} of ${total}`
           });
-        });
+        }, settings);
       } catch (error) {
         console.error('GIF export failed:', error);
       } finally {
@@ -581,6 +583,10 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
         setGifExportProgress({ current: 0, total: 0, status: '' });
       }
     }
+  };
+
+  const handleShowGifExportDialog = () => {
+    setShowGifExportDialog(true);
   };
 
   const getCurrentFractalData = () => {
@@ -970,35 +976,18 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
                       <Upload className="w-4 h-4 mr-2" />
                       Add to Gallery
                     </Button>
-                    <Button onClick={handleExportPNG} className="w-full" variant="outline">
+                    <Button onClick={handleExportPNG} className="w-full">
                       <Download className="w-4 h-4 mr-2" />
                       Export as PNG
                     </Button>
                     <Button 
-                      onClick={handleExportGIF} 
+                      onClick={handleShowGifExportDialog} 
                       className="w-full" 
                       disabled={isExportingGif}
                     >
-                      {isExportingGif ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          {gifExportProgress.status}
-                        </>
-                      ) : (
-                        <>
-                          <Film className="w-4 h-4 mr-2" />
-                          Generate GIF (4s, 25fps)
-                        </>
-                      )}
+                      <Film className="w-4 h-4 mr-2" />
+                      Export Animated GIF
                     </Button>
-                    {isExportingGif && gifExportProgress.total > 0 && (
-                      <div className="w-full bg-secondary rounded-full h-2 mt-2">
-                        <div 
-                          className="bg-primary h-2 rounded-full transition-all duration-200" 
-                          style={{ width: `${(gifExportProgress.current / gifExportProgress.total) * 100}%` }}
-                        />
-                      </div>
-                    )}
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -1288,6 +1277,14 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
           onSuccess={() => {
             console.log('Fractal saved successfully!');
           }}
+        />
+        
+        <GifExportDialog
+          isOpen={showGifExportDialog}
+          onClose={() => setShowGifExportDialog(false)}
+          onExport={handleExportGIF}
+          isExporting={isExportingGif}
+          exportProgress={gifExportProgress}
         />
     </div>
   );
