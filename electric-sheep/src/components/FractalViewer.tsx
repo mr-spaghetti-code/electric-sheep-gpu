@@ -987,7 +987,7 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
                       ) : (
                         <>
                           <Film className="w-4 h-4 mr-2" />
-                          Generate GIF (4s, 12fps)
+                          Generate GIF (4s, 25fps)
                         </>
                       )}
                     </Button>

@@ -1992,9 +1992,8 @@ const init = async (canvas, starts_running = true) => {
         // GIF settings for smaller file size
         const gifWidth = 512;  // Smaller than canvas for file size
         const gifHeight = 512;
-        const fps = 12;
-        const duration = 4; // seconds
-        const totalFrames = fps * duration; // 48 frames
+        const fps = 25;
+        const totalFrames = 100; // 100 frames at 25 fps (4 second duration)
 
         // Create GIF instance
         const gif = new GIF({
