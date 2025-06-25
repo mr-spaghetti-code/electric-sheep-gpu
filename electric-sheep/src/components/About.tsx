@@ -8,8 +8,12 @@ import {
   ExternalLink,
   Users
 } from 'lucide-react';
+import { useSEO, pageSEO } from '../hooks/useSEO';
 
 const About: React.FC = () => {
+  // SEO
+  useSEO(pageSEO.about);
+
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
       <div className="space-y-8">

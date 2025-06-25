@@ -33,6 +33,7 @@ import './FractalViewer.css';
 import type { FractalConfig, FractalInstance, ExtendedFractalTransform } from '@/types/fractal';
 import SaveFractalDialog from './SaveFractalDialog';
 import GifExportDialog from './GifExportDialog';
+import { useSEO, pageSEO } from '../hooks/useSEO';
 
 // Extend the FractalInstance interface for the FractalViewer specific needs
 interface FractalViewerInstance extends FractalInstance {
@@ -118,6 +119,8 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
   // Save dialog state
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   
+  // SEO
+  useSEO(pageSEO.home);
 
 
   useEffect(() => {

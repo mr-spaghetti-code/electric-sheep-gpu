@@ -1,0 +1,27 @@
+User-agent: *
+Allow: /
+
+# Sitemap
+Sitemap: https://fractalmachine.xyz/sitemap.xml
+
+# Crawl-delay for courtesy
+Crawl-delay: 1
+
+# Allow all image files
+Allow: /*.gif$
+Allow: /*.png$
+Allow: /*.jpg$
+Allow: /*.jpeg$
+Allow: /*.svg$
+Allow: /*.webp$
+
+# Block any potential admin areas if they exist
+Disallow: /admin/
+Disallow: /private/
+Disallow: /.env*
+Disallow: /config/
+
+# Allow specific paths for better indexing
+Allow: /gallery
+Allow: /about
+Allow: /fullscreen 

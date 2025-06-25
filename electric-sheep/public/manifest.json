@@ -1,0 +1,38 @@
+{
+  "name": "FractalMachine.xyz - Fractal Flame Generator",
+  "short_name": "FractalMachine",
+  "description": "Real-time WebGPU fractal flame generator for creating stunning digital art",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "orientation": "landscape-primary",
+  "scope": "/",
+  "lang": "en-US",
+  "categories": ["graphics", "design", "art", "entertainment"],
+  "icons": [
+    {
+      "src": "/vite.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/example.gif",
+      "sizes": "1200x800",
+      "type": "image/gif",
+      "platform": "wide",
+      "label": "Fractal flame generator in action"
+    }
+  ],
+  "prefer_related_applications": false,
+  "features": [
+    "Real-time fractal rendering",
+    "WebGPU acceleration",
+    "Interactive controls",
+    "Export to PNG/GIF",
+    "Public gallery"
+  ]
+} 

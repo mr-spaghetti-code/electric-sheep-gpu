@@ -20,6 +20,7 @@ import {
   Download
 } from 'lucide-react';
 import type { FractalConfig, ExtendedFractalTransform } from '@/types/fractal';
+import { useSEO, pageSEO } from '../hooks/useSEO';
 
 interface HandControlState {
   enabled: boolean;
@@ -44,6 +45,9 @@ interface HandControlState {
 }
 
 const FullScreenViewer: React.FC = () => {
+  // SEO
+  useSEO(pageSEO.fullscreen);
+  
   const navigate = useNavigate();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isLoading, setIsLoading] = useState(true);

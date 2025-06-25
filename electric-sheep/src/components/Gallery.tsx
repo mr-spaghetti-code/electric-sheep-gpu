@@ -11,9 +11,13 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { useFractalGallery, type FractalRecord } from '@/hooks/useFractalStorage';
+import { useSEO, pageSEO } from '../hooks/useSEO';
 import FractalRenderer from './FractalRenderer';
 
 const Gallery: React.FC = () => {
+  // SEO
+  useSEO(pageSEO.gallery);
+  
   const { fetchFractals, incrementViewCount, isLoading, error } = useFractalGallery();
   const [fractals, setFractals] = useState<FractalRecord[]>([]);
   const [currentPage, setCurrentPage] = useState(0);

@@ -1,0 +1,9 @@
+Contact: https://github.com/mr-spaghetti-code/electric-sheep-gpu/issues
+Expires: 2025-12-31T23:59:59.000Z
+Acknowledgments: https://github.com/mr-spaghetti-code/electric-sheep-gpu
+Preferred-Languages: en
+Canonical: https://fractalmachine.xyz/.well-known/security.txt
+
+# This is a fractal flame generator web application
+# For security issues, please create a GitHub issue
+# This project is open source and welcomes security contributions 
