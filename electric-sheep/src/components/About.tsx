@@ -45,6 +45,13 @@ const About: React.FC = () => {
               not drawn. Each flame is defined entirely by its rule set, so a tiny preset can render 
               a wall-sized image or an infinite HD animation without losing detail.
             </p>
+            <div className="flex justify-center mt-6">
+              <img 
+                src="/example.gif" 
+                alt="Example fractal flame animation" 
+                className="max-w-full h-auto rounded-lg shadow-lg"
+              />
+            </div>
           </CardContent>
         </Card>
 
@@ -122,7 +129,7 @@ const About: React.FC = () => {
           <CardContent>
             <div className="space-y-3">
               <a 
-                href="/flame_draves.pdf" 
+                href="https://flam3.com/flame_draves.pdf" 
                 target="_blank" 
                 rel="noopener noreferrer"
                 className="flex items-center gap-2 text-primary hover:underline"

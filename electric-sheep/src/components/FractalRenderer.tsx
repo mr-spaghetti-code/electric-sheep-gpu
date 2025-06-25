@@ -255,6 +255,10 @@ const FractalRenderer: React.FC<FractalRendererProps> = ({
             // Apply the fractal data
             await applyFractalData(flam3, fractalData);
             
+            // Set GUI to be hidden by default
+            flam3.gui = false;
+            setGuiEnabled(false);
+            
             // Update UI state to reflect that rendering is now active
             setIsRunning(true);
             setIsLoading(false);

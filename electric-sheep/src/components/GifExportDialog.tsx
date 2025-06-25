@@ -26,7 +26,7 @@ const GifExportDialog: React.FC<GifExportDialogProps> = ({
   const [duration, setDuration] = useState(4); // seconds
   const [quality, setQuality] = useState(0.3); // 0-1 range (low quality default)
   const [size, setSize] = useState(512); // pixels
-  const [fps] = useState(25); // Fixed at 25fps for now
+  const [fps, setFps] = useState(24); // Default to 24fps
 
   const totalFrames = duration * fps;
 
@@ -34,6 +34,12 @@ const GifExportDialog: React.FC<GifExportDialogProps> = ({
     { value: 256, label: '256x256' },
     { value: 512, label: '512x512' },
     { value: 1024, label: '1024x1024' }
+  ];
+
+  const fpsOptions = [
+    { value: 12, label: '12 FPS' },
+    { value: 24, label: '24 FPS' },
+    { value: 30, label: '30 FPS' }
   ];
 
   const handleExport = () => {
@@ -120,15 +126,27 @@ const GifExportDialog: React.FC<GifExportDialogProps> = ({
                      </SelectContent>
                    </Select>
                  </div>
+
+                 <div className="space-y-2">
+                   <Label className="text-sm font-medium">Frame Rate</Label>
+                   <Select value={fps.toString()} onValueChange={(value) => setFps(parseInt(value, 10))}>
+                     <SelectTrigger>
+                       <SelectValue />
+                     </SelectTrigger>
+                     <SelectContent>
+                       {fpsOptions.map(option => (
+                         <SelectItem key={option.value} value={option.value.toString()}>
+                           {option.label}
+                         </SelectItem>
+                       ))}
+                     </SelectContent>
+                   </Select>
+                 </div>
               </div>
 
               <Separator />
 
               <div className="space-y-2 text-sm text-muted-foreground">
-                <div className="flex justify-between">
-                  <span>Frame Rate:</span>
-                  <span>{fps} FPS</span>
-                </div>
                 <div className="flex justify-between">
                   <span>Total Frames:</span>
                   <span>{totalFrames}</span>

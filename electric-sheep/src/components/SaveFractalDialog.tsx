@@ -20,6 +20,16 @@ interface SaveFractalDialogProps {
   canvas?: HTMLCanvasElement;
 }
 
+// Generate a random ID for the fractal title
+const generateRandomId = () => {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let result = 'fractal-';
+  for (let i = 0; i < 6; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+};
+
 const SaveFractalDialog: React.FC<SaveFractalDialogProps> = ({
   isOpen,
   onClose,
@@ -27,7 +37,7 @@ const SaveFractalDialog: React.FC<SaveFractalDialogProps> = ({
   getCurrentFractalData,
   canvas,
 }) => {
-  const [title, setTitle] = useState('');
+  const [title, setTitle] = useState(generateRandomId());
   const [description, setDescription] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
   const { saveFractal, isSaving, saveError } = useFractalStorage();
@@ -63,7 +73,7 @@ const SaveFractalDialog: React.FC<SaveFractalDialogProps> = ({
   };
 
   const handleClose = () => {
-    setTitle('');
+    setTitle(generateRandomId());
     setDescription('');
     setShowSuccess(false);
     onClose();
@@ -99,12 +109,12 @@ const SaveFractalDialog: React.FC<SaveFractalDialogProps> = ({
           {showSuccess ? (
             <div className="flex flex-col items-center justify-center py-8 text-center">
               <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-4">
-                <Check className="w-6 h-6 text-green-600" />
+                <Check className="w-6 h-6 text-green-500" />
               </div>
-              <h3 className="text-lg font-semibold text-green-900 mb-2">
+              <h3 className="text-lg font-semibold text-green-600 mb-2">
                 Fractal Saved Successfully!
               </h3>
-              <p className="text-sm text-green-700">
+              <p className="text-sm text-green-500">
                 Your creation has been added to the gallery.
               </p>
             </div>

@@ -104,7 +104,7 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
   const [availableTransforms, setAvailableTransforms] = useState<Array<{id: number, name: string}>>([]);
   
   // How to use dropdown state
-  const [showHowTo, setShowHowTo] = useState(false);
+  const [showHowTo, setShowHowTo] = useState(true);
   
   // GIF export state
   const [isExportingGif, setIsExportingGif] = useState(false);
@@ -366,6 +366,10 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
             if (flam3.hasActiveAnimations) {
               setAnimationsEnabled(flam3.hasActiveAnimations());
             }
+            
+            // Ensure GUI overlay is disabled to match React state
+            // Do this after randomize() call since it might enable the GUI
+            flam3.gui = guiEnabled; // Set to match the React state (false by default)
             
             setIsLoading(false);
           } else {
@@ -873,6 +877,10 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
                         <div className="flex items-start gap-2">
                           <span className="text-primary">•</span>
                           <span>To modify the fractal: Turn on Transform Overlay. Drag the large ring to modify position. Drag smaller rings to adjust vectors.</span>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <span className="text-primary">•</span>
+                          <span>Share it with the world by adding it to the Gallery or exporting as PNG or GIF.</span>
                         </div>
                       </div>
                     </CardContent>
