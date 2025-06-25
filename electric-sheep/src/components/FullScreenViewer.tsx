@@ -42,6 +42,7 @@ interface HandControlState {
   lastRandomizeTime: number;
   peaceSignStartTime: number | null;
   peaceSignProgress: number;
+  lastPeaceSignDetectedTime: number;
 }
 
 const FullScreenViewer: React.FC = () => {
@@ -78,7 +79,8 @@ const FullScreenViewer: React.FC = () => {
     rightMiddlePinching: false,
     lastRandomizeTime: 0,
     peaceSignStartTime: null,
-    peaceSignProgress: 0
+    peaceSignProgress: 0,
+    lastPeaceSignDetectedTime: 0
   });
 
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -409,8 +411,14 @@ const FullScreenViewer: React.FC = () => {
     }
 
     // Handle peace sign gesture for randomization (either hand)
+    const currentTime = Date.now();
+    
     if (leftPeaceSign || rightPeaceSign) {
-      const currentTime = Date.now();
+      // Update last detected time whenever peace sign is detected
+      setHandControl(prev => ({
+        ...prev,
+        lastPeaceSignDetectedTime: currentTime
+      }));
       
       if (!handControlRef.current.leftMiddlePinching && !handControlRef.current.rightMiddlePinching) {
         // Start peace sign gesture - begin 3-second timer
@@ -420,13 +428,14 @@ const FullScreenViewer: React.FC = () => {
             leftMiddlePinching: leftPeaceSign,
             rightMiddlePinching: rightPeaceSign,
             peaceSignStartTime: currentTime,
-            peaceSignProgress: 0
+            peaceSignProgress: 0,
+            lastPeaceSignDetectedTime: currentTime
           }));
         }
       } else if (handControlRef.current.peaceSignStartTime !== null) {
         // Continue peace sign - update progress
         const elapsedTime = currentTime - handControlRef.current.peaceSignStartTime;
-        const progress = Math.min(elapsedTime / 3000, 1); // 3 seconds = 100%
+        const progress = Math.min(elapsedTime / 2000, 1); // 2 seconds = 100%
         
         setHandControl(prev => ({
           ...prev,
@@ -442,19 +451,24 @@ const FullScreenViewer: React.FC = () => {
             peaceSignStartTime: null,
             peaceSignProgress: 0,
             leftMiddlePinching: false,
-            rightMiddlePinching: false
+            rightMiddlePinching: false,
+            lastPeaceSignDetectedTime: currentTime
           }));
         }
       }
     } else if (handControlRef.current.leftMiddlePinching || handControlRef.current.rightMiddlePinching) {
-      // Stop peace sign gesture - reset timer
-      setHandControl(prev => ({
-        ...prev,
-        leftMiddlePinching: false,
-        rightMiddlePinching: false,
-        peaceSignStartTime: null,
-        peaceSignProgress: 0
-      }));
+      // Only reset if peace sign hasn't been detected for 500ms (debouncing)
+      const timeSinceLastDetection = currentTime - handControlRef.current.lastPeaceSignDetectedTime;
+      if (timeSinceLastDetection > 500) {
+        // Stop peace sign gesture - reset timer
+        setHandControl(prev => ({
+          ...prev,
+          leftMiddlePinching: false,
+          rightMiddlePinching: false,
+          peaceSignStartTime: null,
+          peaceSignProgress: 0
+        }));
+      }
     }
 
     // Update left hand controlled xform
@@ -568,19 +582,31 @@ const FullScreenViewer: React.FC = () => {
     const wrist = landmarks[0];      // Wrist
     
     // Calculate distances from wrist to determine if fingers are extended
-    const indexExtended = Math.hypot(indexTip.x - wrist.x, indexTip.y - wrist.y) > 
-                         Math.hypot(indexPip.x - wrist.x, indexPip.y - wrist.y);
-    const middleExtended = Math.hypot(middleTip.x - wrist.x, middleTip.y - wrist.y) > 
-                          Math.hypot(middlePip.x - wrist.x, middlePip.y - wrist.y);
+    const indexDistance = Math.hypot(indexTip.x - wrist.x, indexTip.y - wrist.y);
+    const indexPipDistance = Math.hypot(indexPip.x - wrist.x, indexPip.y - wrist.y);
+    const middleDistance = Math.hypot(middleTip.x - wrist.x, middleTip.y - wrist.y);
+    const middlePipDistance = Math.hypot(middlePip.x - wrist.x, middlePip.y - wrist.y);
     
-    // Check if ring and pinky are folded (tip closer to wrist than PIP joint)
-    const ringFolded = Math.hypot(ringTip.x - wrist.x, ringTip.y - wrist.y) < 
-                      Math.hypot(ringPip.x - wrist.x, ringPip.y - wrist.y) * 1.1; // Small tolerance
-    const pinkyFolded = Math.hypot(pinkyTip.x - wrist.x, pinkyTip.y - wrist.y) < 
-                       Math.hypot(pinkyPip.x - wrist.x, pinkyPip.y - wrist.y) * 1.1; // Small tolerance
+    // More forgiving extension check - require significant extension
+    const indexExtended = indexDistance > indexPipDistance * 1.15; // 15% longer than PIP distance
+    const middleExtended = middleDistance > middlePipDistance * 1.15; // 15% longer than PIP distance
     
-    // Peace sign: index and middle extended, ring and pinky folded
-    return indexExtended && middleExtended && ringFolded && pinkyFolded;
+    // Calculate ring and pinky distances
+    const ringDistance = Math.hypot(ringTip.x - wrist.x, ringTip.y - wrist.y);
+    const ringPipDistance = Math.hypot(ringPip.x - wrist.x, ringPip.y - wrist.y);
+    const pinkyDistance = Math.hypot(pinkyTip.x - wrist.x, pinkyTip.y - wrist.y);
+    const pinkyPipDistance = Math.hypot(pinkyPip.x - wrist.x, pinkyPip.y - wrist.y);
+    
+    // More forgiving folded check - allow some tolerance
+    const ringFolded = ringDistance < ringPipDistance * 1.3; // Allow up to 30% extension
+    const pinkyFolded = pinkyDistance < pinkyPipDistance * 1.3; // Allow up to 30% extension
+    
+    // Additional check: index and middle should be relatively close to each other (peace sign orientation)
+    const indexMiddleDistance = Math.hypot(indexTip.x - middleTip.x, indexTip.y - middleTip.y);
+    const fingersReasonablyClose = indexMiddleDistance < 0.15; // Reasonable distance for peace sign
+    
+    // Peace sign: index and middle extended, ring and pinky folded, fingers reasonably positioned
+    return indexExtended && middleExtended && ringFolded && pinkyFolded && fingersReasonablyClose;
   };
 
   // Select random xforms for hand control
@@ -791,7 +817,8 @@ const FullScreenViewer: React.FC = () => {
         rightMiddlePinching: false,
         lastRandomizeTime: 0,
         peaceSignStartTime: null,
-        peaceSignProgress: 0
+        peaceSignProgress: 0,
+        lastPeaceSignDetectedTime: 0
       });
     }
   };
