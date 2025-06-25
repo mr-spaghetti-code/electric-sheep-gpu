@@ -514,55 +514,32 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
     }
   }, [isLoading, animationsEnabled]);
 
-  // Reinitialize XForm editors when the transforms tab becomes visible
+  // Initialize XForm editors when component loads and fractal is ready
   useEffect(() => {
     if (!isLoading && window.flam3) {
-      // Add observer to detect when transforms tab content becomes visible
-      const xformContainer = document.getElementById('xforms');
-      if (xformContainer) {
-        const observer = new MutationObserver(() => {
-          // Check if the container is visible and has no children
-          if (xformContainer.offsetParent !== null && xformContainer.children.length === 0) {
-            // Reinitialize XForm editors
-            setTimeout(() => {
-              if (window.flam3 && window.flam3.updateUIControls) {
-                window.flam3.updateUIControls();
-              }
-                             // Force refresh of XForm editors
-               if (window.refreshXFormEditorsList) {
-                 window.refreshXFormEditorsList();
-               }
-            }, 100);
-          }
-        });
-
-        // Also use an intersection observer to detect visibility changes
-        const intersectionObserver = new IntersectionObserver((entries) => {
-          entries.forEach((entry) => {
-            if (entry.isIntersecting && entry.target.children.length === 0) {
-              // Container is visible but empty - reinitialize
-              setTimeout(() => {
-                if (window.flam3 && window.flam3.updateUIControls) {
-                  window.flam3.updateUIControls();
-                }
-                                 if (window.refreshXFormEditorsList) {
-                   window.refreshXFormEditorsList();
-                 }
-              }, 100);
-            }
-          });
-        });
-
-        observer.observe(xformContainer, { childList: true, subtree: true });
-        intersectionObserver.observe(xformContainer);
-
-        return () => {
-          observer.disconnect();
-          intersectionObserver.disconnect();
-        };
-      }
+      // Always refresh XForm editors when component loads to ensure they appear
+      setTimeout(() => {
+        if (window.refreshXFormEditorsList) {
+          window.refreshXFormEditorsList();
+        }
+      }, 200);
     }
   }, [isLoading]);
+
+  // Refresh XForm editors when available transforms change
+  useEffect(() => {
+    if (!isLoading && availableTransforms.length > 0) {
+      // Only refresh if the DOM container exists but has no editors
+      const xformContainer = document.getElementById('xforms');
+      if (xformContainer && xformContainer.children.length === 0) {
+        setTimeout(() => {
+          if (window.refreshXFormEditorsList) {
+            window.refreshXFormEditorsList();
+          }
+        }, 100);
+      }
+    }
+  }, [isLoading, availableTransforms.length]);
 
   const handleExportPNG = () => {
     if (window.flam3 && window.flam3.exportPNG) {
@@ -826,18 +803,18 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
 
       {!isLoading && (
         <div className="fractal-controls-panel">
-          <Tabs 
+                      <Tabs 
             defaultValue="controls" 
             className="w-full h-full"
             onValueChange={(value) => {
-              // When transforms tab is selected, reinitialize XForm editors if they're missing
+              // When transforms tab is selected, ensure XForm editors are initialized
               if (value === 'transforms') {
                 setTimeout(() => {
                   const xformContainer = document.getElementById('xforms');
                   if (xformContainer && xformContainer.children.length === 0 && window.refreshXFormEditorsList) {
                     window.refreshXFormEditorsList();
                   }
-                }, 100);
+                }, 50);
               }
             }}
           >
@@ -1151,15 +1128,6 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
                       size="sm" 
                       variant="outline"
                       className="gap-2"
-                      onClick={() => {
-                        // Ensure XForm editors are visible before adding
-                        setTimeout(() => {
-                          const xformContainer = document.getElementById('xforms');
-                          if (xformContainer && xformContainer.children.length === 0 && window.refreshXFormEditorsList) {
-                            window.refreshXFormEditorsList();
-                          }
-                        }, 50);
-                      }}
                     >
                       <Plus className="w-4 h-4" />
                       Add Transform
@@ -1169,14 +1137,6 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
                     <div 
                       id="xforms" 
                       className="space-y-4"
-                      onFocus={() => {
-                        // Reinitialize when the container gets focus
-                        setTimeout(() => {
-                          if (window.refreshXFormEditorsList) {
-                            window.refreshXFormEditorsList();
-                          }
-                        }, 10);
-                      }}
                     >
                       {/* XForm editors will be inserted here */}
                     </div>

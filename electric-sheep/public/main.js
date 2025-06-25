@@ -1306,8 +1306,14 @@ const init = async (canvas, starts_running = true) => {
         elem.setAttribute('animateX', xform.animateX)
         elem.setAttribute('animateY', xform.animateY)
         
-        // Only set up DOM handlers if shadowRoot exists
-        if (elem.shadowRoot) {
+        // Set up DOM handlers with retry logic for shadowRoot
+        const setupEventHandlers = () => {
+          if (!elem.shadowRoot) {
+            // Retry after a short delay if shadowRoot isn't ready
+            setTimeout(setupEventHandlers, 10)
+            return
+          }
+          
           const selectElem = elem.shadowRoot.querySelector('select')
           if (selectElem) {
             selectElem.onchange = ev => {
@@ -1363,6 +1369,9 @@ const init = async (canvas, starts_running = true) => {
             }
           }
         }
+        
+        // Try to set up handlers immediately, with retry if needed
+        setupEventHandlers()
         
         if (xform_list) {
           xform_list.appendChild(elem)
@@ -1605,10 +1614,16 @@ const init = async (canvas, starts_running = true) => {
     for (let i = fractal.length - 1; i >= 0; i--) {
       gui.unshift(new XFormEditor(fractal[i], xform_list))
     }
-    
-    // Set up add button if it exists
+  }
+  
+  // Initialize editors immediately for canvas interaction
+  initializeXFormEditors()
+  
+  // Set up add button handler separately with retry logic
+  const setupAddButton = () => {
     const addButton = document.getElementById('add-xform')
-    if (addButton) {
+    if (addButton && !addButton._handlerAttached) {
+      addButton._handlerAttached = true
       addButton.onclick = () => {
         const xform = fractal.add({ 
           variation: 'Linear', 
@@ -1618,14 +1633,18 @@ const init = async (canvas, starts_running = true) => {
           animateY: false
         })
         // Insert new XForm editor at the beginning (before default_controls at the end)
+        const xform_list = document.getElementById('xforms')
         gui.unshift(new XFormEditor(xform, xform_list))
         flam3.clear()
       }
+    } else if (!addButton) {
+      // Retry after a short delay if button doesn't exist yet
+      setTimeout(setupAddButton, 100)
     }
   }
   
-  // Initialize editors immediately for canvas interaction
-  initializeXFormEditors()
+  // Try to set up add button immediately and retry if needed
+  setupAddButton()
 
   let running = starts_running
   let lastFrameTime = 0; // Track last frame time for smoother animation
@@ -2287,6 +2306,9 @@ const init = async (canvas, starts_running = true) => {
       for (let i = fractal.length - 1; i >= 0; i--) {
         gui.unshift(new XFormEditor(fractal[i], xform_list));
       }
+      
+      // Ensure add button handler is set up after refresh
+      setupAddButton();
     } catch (error) {
       console.log("Error refreshing XForm editors list:", error);
     }
