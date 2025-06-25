@@ -818,11 +818,12 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
               }
             }}
           >
-            <TabsList className="grid w-full grid-cols-4">
+            <TabsList className="grid w-full grid-cols-5">
                 <TabsTrigger value="controls">Controls</TabsTrigger>
                 <TabsTrigger value="visual">Visual</TabsTrigger>
                 <TabsTrigger value="transforms">Transforms</TabsTrigger>
                 <TabsTrigger value="advanced">Advanced</TabsTrigger>
+                <TabsTrigger value="export">Export</TabsTrigger>
               </TabsList>
               
               <TabsContent value="controls" className="space-y-4">
@@ -952,32 +953,6 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
                   </CardContent>
                 </Card>
 
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <Download className="w-4 h-4" />
-                      Export
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    <Button onClick={handleSaveToGallery} className="w-full">
-                      <Upload className="w-4 h-4 mr-2" />
-                      Add to Gallery
-                    </Button>
-                    <Button onClick={handleExportPNG} className="w-full">
-                      <Download className="w-4 h-4 mr-2" />
-                      Export as PNG
-                    </Button>
-                    <Button 
-                      onClick={handleShowGifExportDialog} 
-                      className="w-full" 
-                      disabled={isExportingGif}
-                    >
-                      <Film className="w-4 h-4 mr-2" />
-                      Export Animated GIF
-                    </Button>
-                  </CardContent>
-                </Card>
               </TabsContent>
               
               <TabsContent value="visual" className="space-y-4">
@@ -1233,6 +1208,35 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
                         </SelectContent>
                       </Select>
                     </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+              
+              <TabsContent value="export" className="space-y-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Download className="w-4 h-4" />
+                      Export
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <Button onClick={handleSaveToGallery} className="w-full">
+                      <Upload className="w-4 h-4 mr-2" />
+                      Add to Gallery
+                    </Button>
+                    <Button onClick={handleExportPNG} className="w-full">
+                      <Download className="w-4 h-4 mr-2" />
+                      Export as PNG
+                    </Button>
+                    <Button 
+                      onClick={handleShowGifExportDialog} 
+                      className="w-full" 
+                      disabled={isExportingGif}
+                    >
+                      <Film className="w-4 h-4 mr-2" />
+                      Export Animated GIF
+                    </Button>
                   </CardContent>
                 </Card>
               </TabsContent>
