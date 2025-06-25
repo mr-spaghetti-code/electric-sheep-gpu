@@ -43,6 +43,17 @@ interface HandControlState {
   peaceSignStartTime: number | null;
   peaceSignProgress: number;
   lastPeaceSignDetectedTime: number;
+  }
+
+// Extend the Window interface to include gtag
+declare global {
+  interface Window {
+    gtag: (command: string, action: string, parameters?: {
+      event_category?: string;
+      event_label?: string;
+      value?: number;
+    }) => void;
+  }
 }
 
 const FullScreenViewer: React.FC = () => {
@@ -691,6 +702,14 @@ const FullScreenViewer: React.FC = () => {
     if (window.flam3 && window.flam3.randomize) {
       window.flam3.randomize();
       
+      // Log Google Analytics event
+      if (window.gtag) {
+        window.gtag('event', 'randomize', {
+          event_category: 'fractal_generation',
+          event_label: 'fullscreen_randomize'
+        });
+      }
+      
       // Set animation speed to 10% after randomizing
       if (window.flam3.config) {
         window.flam3.config.animationSpeed = 0.1;
@@ -853,6 +872,14 @@ const FullScreenViewer: React.FC = () => {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        
+        // Log Google Analytics event
+        if (window.gtag) {
+          window.gtag('event', 'export_image', {
+            event_category: 'export',
+            event_label: 'png_export_fullscreen'
+          });
+        }
       } catch (error) {
         console.error('Error downloading PNG:', error);
       }

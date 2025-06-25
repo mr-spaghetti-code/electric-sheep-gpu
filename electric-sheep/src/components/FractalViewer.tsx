@@ -68,6 +68,11 @@ declare global {
     populateVariationOptions: () => void;
     fractalModuleLoaded: boolean;
     refreshXFormEditorsList?: () => void;
+    gtag: (command: string, action: string, parameters?: {
+      event_category?: string;
+      event_label?: string;
+      value?: number;
+    }) => void;
   }
 }
 
@@ -441,6 +446,14 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
     if (window.flam3 && window.flam3.randomize) {
       window.flam3.randomize();
       
+      // Log Google Analytics event
+      if (window.gtag) {
+        window.gtag('event', 'randomize', {
+          event_category: 'fractal_generation',
+          event_label: 'manual_randomize'
+        });
+      }
+      
       // Update available transforms
       updateAvailableTransforms();
       
@@ -544,6 +557,14 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
   const handleExportPNG = () => {
     if (window.flam3 && window.flam3.exportPNG) {
       window.flam3.exportPNG();
+      
+      // Log Google Analytics event
+      if (window.gtag) {
+        window.gtag('event', 'export_image', {
+          event_category: 'export',
+          event_label: 'png_export'
+        });
+      }
     }
   };
 
@@ -560,6 +581,15 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
             status: status || `Frame ${current} of ${total}`
           });
         }, settings);
+        
+        // Log Google Analytics event on successful export
+        if (window.gtag) {
+          window.gtag('event', 'export_gif', {
+            event_category: 'export',
+            event_label: 'gif_export',
+            value: settings.duration
+          });
+        }
       } catch (error) {
         console.error('GIF export failed:', error);
       } finally {
@@ -1251,6 +1281,14 @@ const FractalViewer: React.FC<FractalViewerProps> = ({
           canvas={canvasRef.current || undefined}
           onSuccess={() => {
             console.log('Fractal saved successfully!');
+            
+            // Log Google Analytics event
+            if (window.gtag) {
+              window.gtag('event', 'save_to_gallery', {
+                event_category: 'gallery',
+                event_label: 'fractal_saved'
+              });
+            }
           }}
         />
         
