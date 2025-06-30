@@ -37,12 +37,10 @@ interface HandControlState {
   rightPinchStart: { x: number; y: number } | null;
   originalZoom: number;
   originalPan: { x: number; y: number };
-  leftMiddlePinching: boolean;
-  rightMiddlePinching: boolean;
   lastRandomizeTime: number;
-  peaceSignStartTime: number | null;
-  peaceSignProgress: number;
-  lastPeaceSignDetectedTime: number;
+  twoHandedPinchCount: number;
+  lastTwoHandedPinchTime: number;
+  randomizeProgress: number;
   }
 
 // Extend the Window interface to include gtag
@@ -71,6 +69,8 @@ const FullScreenViewer: React.FC = () => {
   const [cmapOptions, setCmapOptions] = useState<string[]>([]);
   const [autoRandomize, setAutoRandomize] = useState(false);
   const [guiEnabled, setGuiEnabled] = useState(false);
+  const [showHandGuide, setShowHandGuide] = useState(true);
+  const [timeoutCountdown, setTimeoutCountdown] = useState<number>(0);
   const [handControl, setHandControl] = useState<HandControlState>({
     enabled: false,
     leftXform: null,
@@ -86,12 +86,10 @@ const FullScreenViewer: React.FC = () => {
     rightPinchStart: null,
     originalZoom: 1,
     originalPan: { x: 0, y: 0 },
-    leftMiddlePinching: false,
-    rightMiddlePinching: false,
     lastRandomizeTime: 0,
-    peaceSignStartTime: null,
-    peaceSignProgress: 0,
-    lastPeaceSignDetectedTime: 0
+    twoHandedPinchCount: 0,
+    lastTwoHandedPinchTime: 0,
+    randomizeProgress: 0
   });
 
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -134,6 +132,27 @@ const FullScreenViewer: React.FC = () => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [navigate]);
+
+  // Cleanup on component unmount
+  useEffect(() => {
+    return () => {
+      // Final safety check: ensure camera is stopped when component unmounts
+      if (videoRef.current?.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach(track => {
+          track.stop();
+          console.log('Stopped camera track on component unmount:', track.kind);
+        });
+        videoRef.current.srcObject = null;
+      }
+      
+      // Close MediaPipe Hands if still active
+      if (handsRef.current) {
+        handsRef.current.close();
+        handsRef.current = null;
+      }
+    };
+  }, []);
 
   // Load fractal engine
   useEffect(() => {
@@ -341,8 +360,7 @@ const FullScreenViewer: React.FC = () => {
     // Detect pinch gestures
     const leftPinch = leftHand ? isPinching(leftHand) : false;
     const rightPinch = rightHand ? isPinching(rightHand) : false;
-    const leftPeaceSign = leftHand ? isPeaceSign(leftHand) : false;
-    const rightPeaceSign = rightHand ? isPeaceSign(rightHand) : false;
+    const currentTime = Date.now();
 
     // Handle two-handed pinch gestures (both hands pinching simultaneously)
     if (leftPinch && rightPinch && leftHand && rightHand) {
@@ -367,15 +385,62 @@ const FullScreenViewer: React.FC = () => {
         // Start two-handed pinching - store initial state
         const currentX = (window.flam3?.config as FractalConfig & { x?: number })?.x || 0;
         const currentY = (window.flam3?.config as FractalConfig & { y?: number })?.y || 0;
-        setHandControl(prev => ({
-          ...prev,
-          leftPinching: true,
-          rightPinching: true,
-          leftPinchStart: { x: leftThumb.x, y: leftThumb.y },
-          rightPinchStart: { x: rightThumb.x, y: rightThumb.y },
-          originalZoom: window.flam3?.config?.zoom || 1,
-          originalPan: { x: currentX, y: currentY }
-        }));
+        
+        // Check if this is part of a quick succession of pinches
+        const timeSinceLastPinch = currentTime - handControlRef.current.lastTwoHandedPinchTime;
+        if (timeSinceLastPinch < 2000) { // Within 2 seconds of last pinch
+          const newCount = handControlRef.current.twoHandedPinchCount + 1;
+          
+          if (newCount >= 3 && currentTime - handControlRef.current.lastRandomizeTime > 5000) {
+            // Trigger randomization after 3 quick pinches
+            handleRandomize();
+            setHandControl(prev => ({
+              ...prev,
+              leftPinching: true,
+              rightPinching: true,
+              leftPinchStart: { x: leftThumb.x, y: leftThumb.y },
+              rightPinchStart: { x: rightThumb.x, y: rightThumb.y },
+              originalZoom: window.flam3?.config?.zoom || 1,
+              originalPan: { x: currentX, y: currentY },
+              twoHandedPinchCount: 0,
+              lastTwoHandedPinchTime: currentTime,
+              lastRandomizeTime: currentTime,
+              randomizeProgress: 0
+            }));
+          } else {
+            // Continue counting pinches
+            setHandControl(prev => ({
+              ...prev,
+              leftPinching: true,
+              rightPinching: true,
+              leftPinchStart: { x: leftThumb.x, y: leftThumb.y },
+              rightPinchStart: { x: rightThumb.x, y: rightThumb.y },
+              originalZoom: window.flam3?.config?.zoom || 1,
+              originalPan: { x: currentX, y: currentY },
+              twoHandedPinchCount: newCount,
+              lastTwoHandedPinchTime: currentTime,
+              randomizeProgress: newCount / 3 // Progress towards randomization
+            }));
+            // Reset countdown when making progress
+            if (newCount === 2) {
+              setTimeoutCountdown(3);
+            }
+          }
+        } else {
+          // Reset count if too much time has passed
+          setHandControl(prev => ({
+            ...prev,
+            leftPinching: true,
+            rightPinching: true,
+            leftPinchStart: { x: leftThumb.x, y: leftThumb.y },
+            rightPinchStart: { x: rightThumb.x, y: rightThumb.y },
+            originalZoom: window.flam3?.config?.zoom || 1,
+            originalPan: { x: currentX, y: currentY },
+            twoHandedPinchCount: 1,
+            lastTwoHandedPinchTime: currentTime,
+            randomizeProgress: 1 / 3
+          }));
+        }
       } else if (handControlRef.current.leftPinchStart && handControlRef.current.rightPinchStart && window.flam3?.config) {
         // Continue two-handed pinching
         
@@ -419,68 +484,20 @@ const FullScreenViewer: React.FC = () => {
         leftPinchStart: null,
         rightPinchStart: null
       }));
+    } else {
+      // Neither hand is pinching - check if we should reset the count
+      const timeSinceLastPinch = currentTime - handControlRef.current.lastTwoHandedPinchTime;
+      if (handControlRef.current.twoHandedPinchCount > 0 && timeSinceLastPinch > 2000) {
+        // Reset count if more than 2 seconds have passed
+        setHandControl(prev => ({
+          ...prev,
+          twoHandedPinchCount: 0,
+          randomizeProgress: 0
+        }));
+      }
     }
 
-    // Handle peace sign gesture for randomization (either hand)
-    const currentTime = Date.now();
-    
-    if (leftPeaceSign || rightPeaceSign) {
-      // Update last detected time whenever peace sign is detected
-      setHandControl(prev => ({
-        ...prev,
-        lastPeaceSignDetectedTime: currentTime
-      }));
-      
-      if (!handControlRef.current.leftMiddlePinching && !handControlRef.current.rightMiddlePinching) {
-        // Start peace sign gesture - begin 3-second timer
-        if (currentTime - handControlRef.current.lastRandomizeTime > 5000) { // 5 second cooldown between randomizations
-          setHandControl(prev => ({
-            ...prev,
-            leftMiddlePinching: leftPeaceSign,
-            rightMiddlePinching: rightPeaceSign,
-            peaceSignStartTime: currentTime,
-            peaceSignProgress: 0,
-            lastPeaceSignDetectedTime: currentTime
-          }));
-        }
-      } else if (handControlRef.current.peaceSignStartTime !== null) {
-        // Continue peace sign - update progress
-        const elapsedTime = currentTime - handControlRef.current.peaceSignStartTime;
-        const progress = Math.min(elapsedTime / 2000, 1); // 2 seconds = 100%
-        
-        setHandControl(prev => ({
-          ...prev,
-          peaceSignProgress: progress
-        }));
-        
-        // Trigger randomization after 3 seconds
-        if (progress >= 1 && currentTime - handControlRef.current.lastRandomizeTime > 5000) {
-          handleRandomize();
-          setHandControl(prev => ({
-            ...prev,
-            lastRandomizeTime: currentTime,
-            peaceSignStartTime: null,
-            peaceSignProgress: 0,
-            leftMiddlePinching: false,
-            rightMiddlePinching: false,
-            lastPeaceSignDetectedTime: currentTime
-          }));
-        }
-      }
-    } else if (handControlRef.current.leftMiddlePinching || handControlRef.current.rightMiddlePinching) {
-      // Only reset if peace sign hasn't been detected for 500ms (debouncing)
-      const timeSinceLastDetection = currentTime - handControlRef.current.lastPeaceSignDetectedTime;
-      if (timeSinceLastDetection > 500) {
-        // Stop peace sign gesture - reset timer
-        setHandControl(prev => ({
-          ...prev,
-          leftMiddlePinching: false,
-          rightMiddlePinching: false,
-          peaceSignStartTime: null,
-          peaceSignProgress: 0
-        }));
-      }
-    }
+
 
     // Update left hand controlled xform
     if (handControl.leftXform !== null && leftCenter && window.flam3.fractal[handControl.leftXform]) {
@@ -579,46 +596,7 @@ const FullScreenViewer: React.FC = () => {
     return distance < 0.06; // Pinch threshold from the example
   };
 
-  // Helper function to detect peace sign gesture (index and middle fingers extended, ring and pinky folded)
-  const isPeaceSign = (landmarks: NormalizedLandmark[]) => {
-    // Get relevant landmarks
-    const indexTip = landmarks[8];   // Index finger tip
-    const indexPip = landmarks[6];   // Index finger PIP joint
-    const middleTip = landmarks[12]; // Middle finger tip
-    const middlePip = landmarks[10]; // Middle finger PIP joint
-    const ringTip = landmarks[16];   // Ring finger tip
-    const ringPip = landmarks[14];   // Ring finger PIP joint
-    const pinkyTip = landmarks[20];  // Pinky tip
-    const pinkyPip = landmarks[18];  // Pinky PIP joint
-    const wrist = landmarks[0];      // Wrist
-    
-    // Calculate distances from wrist to determine if fingers are extended
-    const indexDistance = Math.hypot(indexTip.x - wrist.x, indexTip.y - wrist.y);
-    const indexPipDistance = Math.hypot(indexPip.x - wrist.x, indexPip.y - wrist.y);
-    const middleDistance = Math.hypot(middleTip.x - wrist.x, middleTip.y - wrist.y);
-    const middlePipDistance = Math.hypot(middlePip.x - wrist.x, middlePip.y - wrist.y);
-    
-    // More forgiving extension check - require significant extension
-    const indexExtended = indexDistance > indexPipDistance * 1.15; // 15% longer than PIP distance
-    const middleExtended = middleDistance > middlePipDistance * 1.15; // 15% longer than PIP distance
-    
-    // Calculate ring and pinky distances
-    const ringDistance = Math.hypot(ringTip.x - wrist.x, ringTip.y - wrist.y);
-    const ringPipDistance = Math.hypot(ringPip.x - wrist.x, ringPip.y - wrist.y);
-    const pinkyDistance = Math.hypot(pinkyTip.x - wrist.x, pinkyTip.y - wrist.y);
-    const pinkyPipDistance = Math.hypot(pinkyPip.x - wrist.x, pinkyPip.y - wrist.y);
-    
-    // More forgiving folded check - allow some tolerance
-    const ringFolded = ringDistance < ringPipDistance * 1.3; // Allow up to 30% extension
-    const pinkyFolded = pinkyDistance < pinkyPipDistance * 1.3; // Allow up to 30% extension
-    
-    // Additional check: index and middle should be relatively close to each other (peace sign orientation)
-    const indexMiddleDistance = Math.hypot(indexTip.x - middleTip.x, indexTip.y - middleTip.y);
-    const fingersReasonablyClose = indexMiddleDistance < 0.15; // Reasonable distance for peace sign
-    
-    // Peace sign: index and middle extended, ring and pinky folded, fingers reasonably positioned
-    return indexExtended && middleExtended && ringFolded && pinkyFolded && fingersReasonablyClose;
-  };
+
 
   // Select random xforms for hand control
   const selectRandomXforms = () => {
@@ -682,6 +660,41 @@ const FullScreenViewer: React.FC = () => {
       return () => clearInterval(interval);
     }
   }, [isLoading, animationsEnabled, autoRandomize]);
+
+  // Reset pinch counter after timeout with countdown
+  useEffect(() => {
+    if (handControl.randomizeProgress >= 2/3 && handControl.randomizeProgress < 1) {
+      setTimeoutCountdown(3);
+      
+      // Update countdown every second
+      const countdownInterval = setInterval(() => {
+        setTimeoutCountdown(prev => {
+          if (prev <= 1) {
+            // Check if we should actually reset
+            const currentTime = Date.now();
+            const timeSinceLastPinch = currentTime - handControlRef.current.lastTwoHandedPinchTime;
+            
+            if (timeSinceLastPinch > 3000) {
+              setHandControl(prevControl => ({
+                ...prevControl,
+                twoHandedPinchCount: 0,
+                randomizeProgress: 0
+              }));
+            }
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+      return () => {
+        clearInterval(countdownInterval);
+        setTimeoutCountdown(0);
+      };
+    } else {
+      setTimeoutCountdown(0);
+    }
+  }, [handControl.randomizeProgress]);
 
   // Event handlers
   const handleStart = () => {
@@ -781,6 +794,7 @@ const FullScreenViewer: React.FC = () => {
       // Enable hand control and select random xforms
       selectRandomXforms();
       setHandControl(prev => ({ ...prev, enabled: true }));
+      setShowHandGuide(true); // Auto-show gesture guide when enabling hand control
     } else {
       // Disable hand control and restore original xforms
       if (window.flam3?.fractal) {
@@ -832,12 +846,10 @@ const FullScreenViewer: React.FC = () => {
         rightPinchStart: null,
         originalZoom: 1,
         originalPan: { x: 0, y: 0 },
-        leftMiddlePinching: false,
-        rightMiddlePinching: false,
         lastRandomizeTime: 0,
-        peaceSignStartTime: null,
-        peaceSignProgress: 0,
-        lastPeaceSignDetectedTime: 0
+        twoHandedPinchCount: 0,
+        lastTwoHandedPinchTime: 0,
+        randomizeProgress: 0
       });
     }
   };
@@ -887,6 +899,15 @@ const FullScreenViewer: React.FC = () => {
   };
 
   const handleExitFullScreen = () => {
+    // Ensure camera is stopped before navigating away
+    if (handControl.enabled && videoRef.current?.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      stream.getTracks().forEach(track => {
+        track.stop();
+        console.log('Stopped camera track on exit:', track.kind);
+      });
+      videoRef.current.srcObject = null;
+    }
     navigate('/');
   };
 
@@ -937,15 +958,128 @@ const FullScreenViewer: React.FC = () => {
 
       {/* Debug video element for hand tracking */}
       {handControl.enabled && (
-        <video 
-          ref={videoRef} 
-          className="fixed bottom-4 left-4 z-50 w-48 h-36 border-2 border-white/20 rounded-lg bg-black/50" 
-          autoPlay 
-          playsInline 
-          muted
-          width={640}
-          height={480}
-        />
+        <>
+          <video 
+            ref={videoRef} 
+            className="fixed bottom-4 left-4 z-50 w-48 h-36 border-2 border-white/20 rounded-lg bg-black/50" 
+            autoPlay 
+            playsInline 
+            muted
+            width={640}
+            height={480}
+          />
+          {/* Camera active indicator */}
+          <div className="fixed bottom-4 left-52 z-50 flex items-center gap-2 bg-red-600/90 text-white px-3 py-1.5 rounded-full text-xs font-medium">
+            <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
+            Camera Active
+          </div>
+        </>
+      )}
+
+      {/* Hand gesture guide */}
+      {handControl.enabled && !isLoading && (
+        <div className="fixed top-20 left-4 z-40 max-w-xs">
+          {showHandGuide ? (
+            <Card className="bg-black/80 backdrop-blur-sm border-white/20 text-white">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Hand className="w-4 h-4" />
+                    Hand Gestures
+                  </CardTitle>
+                  <Button
+                    onClick={() => setShowHandGuide(false)}
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0 text-white/70 hover:text-white hover:bg-white/20"
+                  >
+                    <Minimize className="w-3 h-3" />
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3 text-xs">
+              <div className="space-y-2">
+                <div className="flex items-start gap-2">
+                  <span className="text-lg">✋</span>
+                  <div>
+                    <p className="font-semibold">Move Hands</p>
+                    <p className="text-white/70">Control transforms</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="text-lg">🤏🤏</span>
+                  <div>
+                    <p className="font-semibold">Pinch Both Hands</p>
+                    <p className="text-white/70">Zoom & Pan mode</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="text-lg">↔️</span>
+                  <div>
+                    <p className="font-semibold">Spread/Close</p>
+                    <p className="text-white/70">Zoom in/out</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="text-lg">3️⃣</span>
+                  <div>
+                    <p className="font-semibold">Triple Pinch</p>
+                    <p className="text-white/70">Pinch 3x quickly to randomize</p>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Privacy notice */}
+              <div className="text-xs text-white/50 border-t border-white/20 pt-2 mt-2">
+                <p className="flex items-center gap-1">
+                  <span className="inline-block w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />
+                  Camera is active and will auto-stop when disabled
+                </p>
+              </div>
+              
+              {/* Active gesture indicator */}
+              {(handControl.leftPinching && handControl.rightPinching) && (
+                <div className="pt-2 border-t border-white/20">
+                  <p className="text-yellow-400 animate-pulse">
+                    🤏 Two-handed control active
+                  </p>
+                  {handControl.randomizeProgress >= 1/3 && handControl.randomizeProgress < 1 && (
+                    <p className="text-blue-400 text-xs mt-1">
+                      Pinch count: {Math.floor(handControl.randomizeProgress * 3)}/3
+                    </p>
+                  )}
+                </div>
+              )}
+              
+              {/* Transform control indicators */}
+              {(handControl.leftXform !== null || handControl.rightXform !== null) && (
+                <div className="pt-2 border-t border-white/20 space-y-1">
+                  {handControl.leftXform !== null && (
+                    <p className="text-green-400">
+                      Left Hand → Transform {handControl.leftXform + 1}
+                    </p>
+                  )}
+                  {handControl.rightXform !== null && (
+                    <p className="text-green-400">
+                      Right Hand → Transform {handControl.rightXform + 1}
+                    </p>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+          ) : (
+            <Button
+              onClick={() => setShowHandGuide(true)}
+              variant="outline"
+              size="sm"
+              className="bg-black/80 border-white/20 text-white hover:bg-black/90 hover:border-white/40 flex items-center gap-2"
+            >
+              <Hand className="w-4 h-4" />
+              <span className="text-xs">Show Gestures</span>
+            </Button>
+          )}
+        </div>
       )}
 
       {/* Exit button - always visible */}
@@ -978,21 +1112,79 @@ const FullScreenViewer: React.FC = () => {
         </div>
       )}
 
-      {/* Peace sign progress bar */}
-      {!isLoading && handControl.enabled && handControl.peaceSignProgress > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 bg-black/80 backdrop-blur-sm border-t border-white/20">
+      {/* Hand Control toggle button - prominent circular button */}
+      {!isLoading && (
+        <div className="absolute bottom-8 right-8 z-50">
+          <div className="relative group">
+            {/* Pulsing ring animation when not active */}
+            {!handControl.enabled && (
+              <div className="absolute inset-0 rounded-full animate-ping bg-white/20" />
+            )}
+            <Button 
+              onClick={handleToggleHandControl}
+              variant={handControl.enabled ? "default" : "outline"}
+              size="lg"
+              className={`
+                relative w-16 h-16 rounded-full p-0 transition-all duration-300
+                ${handControl.enabled 
+                  ? 'bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 border-0 shadow-lg shadow-purple-500/25' 
+                  : 'bg-black/50 border-white/20 hover:bg-black/70 hover:border-white/40'
+                }
+              `}
+              title={handControl.enabled ? "Disable hand control" : "Enable hand control"}
+            >
+              <Hand className={`w-8 h-8 ${handControl.enabled ? 'text-white animate-pulse' : 'text-white/90'}`} />
+            </Button>
+            {handControl.enabled && (
+              <div className="absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap">
+                <span className="text-xs text-white/70 bg-black/50 px-2 py-1 rounded">
+                  {handControl.randomizeProgress >= 2/3 && handControl.randomizeProgress < 1 
+                    ? '🤏 One more pinch!'
+                    : 'Hand Control Active'
+                  }
+                </span>
+              </div>
+            )}
+            {/* Hover tooltip */}
+            {!handControl.enabled && (
+              <div className="absolute right-full mr-4 top-1/2 -translate-y-1/2 opacity-0 hover:opacity-100 transition-opacity duration-300 pointer-events-none group-hover:opacity-100">
+                <div className="bg-black/90 text-white text-xs px-3 py-2 rounded-lg whitespace-nowrap">
+                  <p className="font-semibold mb-1">✋ Hand Control</p>
+                  <p>Control fractals with your hands!</p>
+                  <p className="text-white/70 mt-1">Click to enable camera</p>
+                </div>
+                <div className="absolute left-full top-1/2 -translate-y-1/2 w-0 h-0 border-t-[6px] border-t-transparent border-b-[6px] border-b-transparent border-l-[6px] border-l-black/90" />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Triple pinch progress bar - only show after 2 pinches */}
+      {!isLoading && handControl.enabled && handControl.randomizeProgress >= 2/3 && handControl.randomizeProgress < 1 && (
+        <div className={`fixed bottom-0 left-0 right-0 z-50 bg-black/80 backdrop-blur-sm border-t border-white/20 ${timeoutCountdown <= 1 ? 'animate-pulse' : ''}`}>
           <div className="px-6 py-3">
             <div className="flex items-center gap-3 mb-2">
-              <span className="text-white text-sm">✌️ Hold peace sign to randomize</span>
-              <span className="text-white/70 text-xs">
-                {Math.ceil((1 - handControl.peaceSignProgress) * 3)}s
+              <span className="text-white text-sm">🤏 One more pinch to randomize!</span>
+              <span className={`text-xs ${timeoutCountdown <= 1 ? 'text-red-400' : 'text-white/70'}`}>
+                {timeoutCountdown > 0 ? `${timeoutCountdown}s remaining` : '2/3 complete'}
               </span>
             </div>
-            <div className="w-full bg-white/20 rounded-full h-2">
+            <div className="w-full bg-white/20 rounded-full h-2 relative overflow-hidden">
               <div 
-                className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full transition-all duration-100 ease-out"
-                style={{ width: `${handControl.peaceSignProgress * 100}%` }}
+                className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full transition-all duration-300 ease-out"
+                style={{ width: `${handControl.randomizeProgress * 100}%` }}
               />
+              {timeoutCountdown > 0 && (
+                <div 
+                  className="absolute top-0 left-0 h-full bg-gradient-to-r from-transparent to-red-500/40 transition-all duration-1000 ease-linear"
+                  style={{ 
+                    width: '100%',
+                    transform: `translateX(${(timeoutCountdown / 3) * 100}%)`,
+                    opacity: timeoutCountdown <= 1 ? 0.8 : 0.4
+                  }}
+                />
+              )}
             </div>
           </div>
         </div>
@@ -1068,14 +1260,20 @@ const FullScreenViewer: React.FC = () => {
                   {guiEnabled ? 'Interactive GUI On' : 'Interactive GUI Off'}
                 </Toggle>
 
-                <Toggle 
-                  pressed={handControl.enabled} 
-                  onPressedChange={handleToggleHandControl}
-                  className="w-full"
-                >
-                  <Hand className="w-4 h-4 mr-2" />
-                  {handControl.enabled ? 'Hand Control On' : 'Hand Control Off'}
-                </Toggle>
+                <div className="space-y-2">
+                  <Toggle 
+                    pressed={handControl.enabled} 
+                    onPressedChange={handleToggleHandControl}
+                    className="w-full opacity-60"
+                    size="sm"
+                  >
+                    <Hand className="w-4 h-4 mr-2" />
+                    {handControl.enabled ? 'Hand Control On' : 'Hand Control Off'}
+                  </Toggle>
+                  <p className="text-xs text-white/50 text-center">
+                    Use the button in the bottom right ↘️
+                  </p>
+                </div>
               </div>
 
               <Separator className="bg-white/20" />
@@ -1120,9 +1318,9 @@ const FullScreenViewer: React.FC = () => {
                       <p>• Both hands pinch = Zoom & Pan</p>
                       <p>• Thumbs apart/together = Zoom in/out</p>
                       <p>• Move thumb midpoint = Pan</p>
-                      <p>• Peace sign ✌️ = Randomize</p>
+                      <p>• Triple pinch quickly = Randomize</p>
                       {(handControl.leftPinching && handControl.rightPinching) && <p className="text-yellow-400">🤏 Two-handed control active</p>}
-                      {(handControl.leftMiddlePinching || handControl.rightMiddlePinching) && <p className="text-green-400">✌️ Peace sign (randomize)</p>}
+                      {handControl.randomizeProgress >= 1/3 && handControl.randomizeProgress < 1 && <p className="text-green-400">🤏 Pinch {Math.floor(handControl.randomizeProgress * 3)}/3 (randomize)</p>}
                     </div>
                   </div>
                 )}
