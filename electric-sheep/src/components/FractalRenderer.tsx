@@ -11,7 +11,8 @@ import {
   Eye,
   EyeOff,
   X,
-  Loader2
+  Loader2,
+  Maximize
 } from 'lucide-react';
 import type { FractalRecord } from '@/hooks/useFractalStorage';
 import type { FractalInstance } from '@/types/fractal';
@@ -377,6 +378,11 @@ const FractalRenderer: React.FC<FractalRendererProps> = ({
     }
   };
 
+  const handleViewFullscreen = () => {
+    // Navigate to fullscreen view with the fractal ID
+    window.open(`/fullscreen/${fractalData.id}`, '_blank');
+  };
+
   if (error) {
     return (
       <Card className={`max-w-md mx-auto ${className}`}>
@@ -493,6 +499,10 @@ const FractalRenderer: React.FC<FractalRendererProps> = ({
                 <Button onClick={handleExportPNG} variant="outline" size="sm">
                   <Download className="w-4 h-4 mr-2" />
                   Download PNG
+                </Button>
+                <Button onClick={handleViewFullscreen} variant="outline" size="sm">
+                  <Maximize className="w-4 h-4 mr-2" />
+                  View Fullscreen
                 </Button>
               </div>
             )}

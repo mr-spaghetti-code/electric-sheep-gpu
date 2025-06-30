@@ -25,7 +25,9 @@ function App() {
         <Routes>
           <Route path="/" element={<FractalViewer />} />
           <Route path="/fullscreen" element={<FullScreenViewer />} />
+          <Route path="/fullscreen/:fractalId" element={<FullScreenViewer />} />
           <Route path="/gallery" element={<Gallery />} />
+          <Route path="/gallery/:fractalId" element={<Gallery />} />
           <Route path="/lab" element={<Lab />} />
           <Route path="/about" element={<About />} />
         </Routes>

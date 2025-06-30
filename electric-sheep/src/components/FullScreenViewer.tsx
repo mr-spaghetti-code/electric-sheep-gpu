@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -21,6 +21,8 @@ import {
 } from 'lucide-react';
 import type { FractalConfig, ExtendedFractalTransform } from '@/types/fractal';
 import { useSEO, pageSEO } from '../hooks/useSEO';
+import { useFractalGallery } from '@/hooks/useFractalStorage';
+import type { FractalRecord } from '@/hooks/useFractalStorage';
 
 interface HandControlState {
   enabled: boolean;
@@ -59,6 +61,10 @@ const FullScreenViewer: React.FC = () => {
   useSEO(pageSEO.fullscreen);
   
   const navigate = useNavigate();
+  const { fractalId } = useParams<{ fractalId?: string }>();
+  const { fetchFractalById, incrementViewCount } = useFractalGallery();
+  
+  const [loadedFractal, setLoadedFractal] = useState<FractalRecord | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -118,6 +124,71 @@ const FullScreenViewer: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // Update SEO when viewing a specific fractal
+  useEffect(() => {
+    if (loadedFractal) {
+      // Update page title and meta tags for the specific fractal
+      document.title = `${loadedFractal.title} - Full Screen | Electric Sheep GPU`;
+      
+      // Update meta tags for social sharing
+      const metaDescription = document.querySelector('meta[name="description"]');
+      if (metaDescription) {
+        metaDescription.setAttribute('content', 
+          loadedFractal.description || `Experience "${loadedFractal.title}" in full screen - A mesmerizing GPU-accelerated fractal flame`
+        );
+      }
+
+      // Update Open Graph tags
+      const ogTitle = document.querySelector('meta[property="og:title"]');
+      if (ogTitle) {
+        ogTitle.setAttribute('content', `${loadedFractal.title} - Full Screen Fractal`);
+      }
+
+      const ogDescription = document.querySelector('meta[property="og:description"]');
+      if (ogDescription) {
+        ogDescription.setAttribute('content', 
+          loadedFractal.description || `Experience this stunning fractal flame in full screen mode`
+        );
+      }
+
+      // If there's a thumbnail, update the image meta tag
+      if (loadedFractal.thumbnail_url) {
+        const ogImage = document.querySelector('meta[property="og:image"]');
+        if (ogImage) {
+          ogImage.setAttribute('content', loadedFractal.thumbnail_url);
+        }
+      }
+
+      const ogUrl = document.querySelector('meta[property="og:url"]');
+      if (ogUrl) {
+        ogUrl.setAttribute('content', `${window.location.origin}/fullscreen/${loadedFractal.id}`);
+      }
+    }
+  }, [loadedFractal]);
+
+  // Load specific fractal if fractalId is in URL
+  useEffect(() => {
+    if (fractalId) {
+      loadSpecificFractal(fractalId);
+    }
+  }, [fractalId]);
+
+  const loadSpecificFractal = async (id: string) => {
+    const fractal = await fetchFractalById(id);
+    if (fractal) {
+      setLoadedFractal(fractal);
+      // Increment view count
+      try {
+        await incrementViewCount(fractal.id);
+      } catch (err) {
+        console.warn('Failed to increment view count:', err);
+      }
+    } else {
+      // If fractal not found, redirect to fullscreen
+      navigate('/fullscreen');
+    }
+  };
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -157,6 +228,55 @@ const FullScreenViewer: React.FC = () => {
   // Load fractal engine
   useEffect(() => {
     let script: HTMLScriptElement | null = null;
+    
+    const applyFractalData = async (flam3: typeof window.flam3, data: FractalRecord) => {
+      try {
+        // Set colormap
+        if (data.colormap && window.cmaps) {
+          console.log('Loading fractal with colormap:', data.colormap);
+          flam3.cmap = data.colormap;
+          setSelectedCmap(data.colormap);
+        }
+
+        // Apply config
+        const config = flam3.config;
+        Object.assign(config, data.config);
+
+        // Clear existing transforms
+        flam3.fractal.length = 0;
+
+        // Add new transforms
+        for (let i = 0; i < data.transforms.length; i++) {
+          const transform = data.transforms[i];
+          flam3.fractal.add({
+            variation: transform.variation,
+            color: transform.color,
+            a: transform.a,
+            b: transform.b,
+            c: transform.c,
+            d: transform.d,
+            e: transform.e,
+            f: transform.f,
+            animateX: transform.animateX,
+            animateY: transform.animateY,
+          });
+        }
+
+        // Update the GPU buffers and clear
+        flam3.updateParams();
+        flam3.clear();
+
+        console.log('Fractal data applied successfully:', {
+          config: data.config,
+          transforms: data.transforms,
+          colormap: data.colormap
+        });
+
+      } catch (error) {
+        console.error('Error applying fractal data:', error);
+        throw error;
+      }
+    };
     
     const loadFractalEngine = async () => {
       try {
@@ -205,7 +325,13 @@ const FullScreenViewer: React.FC = () => {
             
             // Initialize with a random fractal
             if (flam3.randomize) {
-              flam3.randomize();
+              // Only randomize if we don't have a specific fractal to load
+              if (!loadedFractal) {
+                flam3.randomize();
+              } else {
+                // Apply the loaded fractal data
+                await applyFractalData(flam3, loadedFractal);
+              }
             }
             
             // Set animation speed to 10% by default
@@ -251,7 +377,7 @@ const FullScreenViewer: React.FC = () => {
         window.flam3.stop();
       }
     };
-  }, []);
+  }, [loadedFractal]);
 
   // Initialize hand tracking
   useEffect(() => {
@@ -1085,15 +1211,22 @@ const FullScreenViewer: React.FC = () => {
       {/* Exit button - always visible */}
       {!isLoading && (
         <div className="absolute top-4 left-4 z-50">
-          <Button 
-            onClick={handleExitFullScreen}
-            variant="outline"
-            size="sm"
-            className="bg-black/50 border-white/20 text-white hover:bg-black/70"
-          >
-            <Minimize className="w-4 h-4 mr-2" />
-            Exit Full Screen
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button 
+              onClick={handleExitFullScreen}
+              variant="outline"
+              size="sm"
+              className="bg-black/50 border-white/20 text-white hover:bg-black/70"
+            >
+              <Minimize className="w-4 h-4 mr-2" />
+              Exit Full Screen
+            </Button>
+            {loadedFractal && (
+              <div className="bg-black/50 border border-white/20 text-white px-3 py-1.5 rounded-md text-sm">
+                <span className="opacity-70">Viewing:</span> {loadedFractal.title}
+              </div>
+            )}
+          </div>
         </div>
       )}
 

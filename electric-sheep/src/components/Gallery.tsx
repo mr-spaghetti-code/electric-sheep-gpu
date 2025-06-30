@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -17,10 +18,13 @@ import { useSEO, pageSEO } from '../hooks/useSEO';
 import FractalRenderer from './FractalRenderer';
 
 const Gallery: React.FC = () => {
-  // SEO
+  // SEO - default gallery SEO
   useSEO(pageSEO.gallery);
   
-  const { fetchFractals, incrementViewCount, isLoading, error } = useFractalGallery();
+  const { fractalId } = useParams<{ fractalId?: string }>();
+  const navigate = useNavigate();
+  
+  const { fetchFractals, fetchFractalById, incrementViewCount, isLoading, error } = useFractalGallery();
   const [fractals, setFractals] = useState<FractalRecord[]>([]);
   const [filteredFractals, setFilteredFractals] = useState<FractalRecord[]>([]);
   const [currentPage, setCurrentPage] = useState(0);
@@ -31,10 +35,35 @@ const Gallery: React.FC = () => {
 
   const ITEMS_PER_PAGE = 10;
 
-  // Load initial fractals
+  // Load initial fractals only if not viewing specific fractal
   useEffect(() => {
-    loadFractals(0, true);
-  }, []);
+    if (!fractalId) {
+      loadFractals(0, true);
+    }
+  }, [fractalId]);
+
+  // Load specific fractal if fractalId is in URL
+  useEffect(() => {
+    if (fractalId) {
+      loadSpecificFractal(fractalId);
+    }
+  }, [fractalId]);
+
+  const loadSpecificFractal = async (id: string) => {
+    const fractal = await fetchFractalById(id);
+    if (fractal) {
+      setSelectedFractal(fractal);
+      // Also increment view count when loading from URL
+      try {
+        await incrementViewCount(fractal.id);
+      } catch (err) {
+        console.warn('Failed to increment view count:', err);
+      }
+    } else {
+      // If fractal not found, redirect to gallery
+      navigate('/gallery');
+    }
+  };
 
   const loadFractals = async (page: number, reset: boolean = false) => {
     try {
@@ -84,6 +113,8 @@ const Gallery: React.FC = () => {
   };
 
   const handleThumbnailClick = async (fractal: FractalRecord) => {
+    // Update URL to include fractal ID
+    navigate(`/gallery/${fractal.id}`);
     setSelectedFractal(fractal);
     
     // Increment view count
@@ -104,7 +135,53 @@ const Gallery: React.FC = () => {
 
   const handleCloseFractal = () => {
     setSelectedFractal(null);
+    // Navigate back to gallery
+    navigate('/gallery');
   };
+
+  // Update SEO when viewing a specific fractal
+  useEffect(() => {
+    if (selectedFractal) {
+      // Update page title and meta tags for the specific fractal
+      document.title = `${selectedFractal.title} - Electric Sheep GPU Fractal Gallery`;
+      
+      // Update meta tags for social sharing
+      const metaDescription = document.querySelector('meta[name="description"]');
+      if (metaDescription) {
+        metaDescription.setAttribute('content', 
+          selectedFractal.description || `View "${selectedFractal.title}" - A beautiful GPU-accelerated fractal flame created with Electric Sheep`
+        );
+      }
+
+      // Update Open Graph tags
+      const ogTitle = document.querySelector('meta[property="og:title"]');
+      if (ogTitle) {
+        ogTitle.setAttribute('content', `${selectedFractal.title} - Electric Sheep GPU Fractal`);
+      }
+
+      const ogDescription = document.querySelector('meta[property="og:description"]');
+      if (ogDescription) {
+        ogDescription.setAttribute('content', 
+          selectedFractal.description || `View this beautiful GPU-accelerated fractal flame created with Electric Sheep`
+        );
+      }
+
+      // If there's a thumbnail, update the image meta tag
+      if (selectedFractal.thumbnail_url) {
+        const ogImage = document.querySelector('meta[property="og:image"]');
+        if (ogImage) {
+          ogImage.setAttribute('content', selectedFractal.thumbnail_url);
+        }
+      }
+
+      const ogUrl = document.querySelector('meta[property="og:url"]');
+      if (ogUrl) {
+        ogUrl.setAttribute('content', `${window.location.origin}/gallery/${selectedFractal.id}`);
+      }
+    } else if (!fractalId) {
+      // When returning to gallery, the component will re-render and useSEO at the top will reset SEO
+    }
+  }, [selectedFractal, fractalId]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
