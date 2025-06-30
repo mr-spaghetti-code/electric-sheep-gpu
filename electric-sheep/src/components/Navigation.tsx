@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Home, Info, Maximize, Images } from 'lucide-react';
+import { Home, Info, Maximize, Images, TestTubes } from 'lucide-react';
 
 const Navigation: React.FC = () => {
   const location = useLocation();
@@ -44,6 +44,17 @@ const Navigation: React.FC = () => {
             <Link to="/gallery" className="flex items-center gap-2">
               <Images className="w-4 h-4" />
               Gallery
+            </Link>
+          </Button>
+          
+          <Button
+            asChild
+            variant={location.pathname === '/lab' ? 'default' : 'ghost'}
+            size="sm"
+          >
+            <Link to="/lab" className="flex items-center gap-2">
+              <TestTubes className="w-4 h-4" />
+              Lab
             </Link>
           </Button>
           

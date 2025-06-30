@@ -11,6 +11,8 @@ export interface SaveFractalData {
   width: number;
   height: number;
   canvas?: HTMLCanvasElement; // Add canvas for thumbnail generation
+  generation?: number;
+  parents?: string[];
 }
 
 export interface FractalRecord {
@@ -27,6 +29,8 @@ export interface FractalRecord {
   gif_url?: string;
   view_count: number;
   created_at: string;
+  generation?: number;
+  parents?: string[];
 }
 
 // Helper function to generate thumbnail from WebGPU canvas
@@ -172,6 +176,8 @@ export const useFractalStorage = () => {
           width: data.width,
           height: data.height,
           thumbnail_url: thumbnailUrl,
+          generation: data.generation || 0,
+          parents: data.parents || null,
         });
 
       if (error) {

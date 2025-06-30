@@ -3,6 +3,7 @@ import FractalViewer from './components/FractalViewer';
 import About from './components/About';
 import FullScreenViewer from './components/FullScreenViewer';
 import Gallery from './components/Gallery';
+import Lab from './components/Lab';
 import Navigation from './components/Navigation';
 import MobileWarning from './components/MobileWarning';
 import { useMobileDetection } from './hooks/useMobileDetection';
@@ -25,6 +26,7 @@ function App() {
           <Route path="/" element={<FractalViewer />} />
           <Route path="/fullscreen" element={<FullScreenViewer />} />
           <Route path="/gallery" element={<Gallery />} />
+          <Route path="/lab" element={<Lab />} />
           <Route path="/about" element={<About />} />
         </Routes>
       </div>

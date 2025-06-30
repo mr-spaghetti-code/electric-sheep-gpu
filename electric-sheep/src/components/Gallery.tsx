@@ -1,14 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Images,
   Eye,
   Calendar,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Filter
 } from 'lucide-react';
 import { useFractalGallery, type FractalRecord } from '@/hooks/useFractalStorage';
 import { useSEO, pageSEO } from '../hooks/useSEO';
@@ -20,10 +22,12 @@ const Gallery: React.FC = () => {
   
   const { fetchFractals, incrementViewCount, isLoading, error } = useFractalGallery();
   const [fractals, setFractals] = useState<FractalRecord[]>([]);
+  const [filteredFractals, setFilteredFractals] = useState<FractalRecord[]>([]);
   const [currentPage, setCurrentPage] = useState(0);
   const [selectedFractal, setSelectedFractal] = useState<FractalRecord | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [selectedGeneration, setSelectedGeneration] = useState<string>('all');
 
   const ITEMS_PER_PAGE = 10;
 
@@ -51,6 +55,27 @@ const Gallery: React.FC = () => {
       setLoadingMore(false);
     }
   };
+
+  // Update filtered fractals when fractals or selected generation changes
+  useEffect(() => {
+    let filtered: FractalRecord[];
+    if (selectedGeneration === 'all') {
+      filtered = fractals;
+    } else {
+      const genNumber = parseInt(selectedGeneration);
+      filtered = fractals.filter(fractal => (fractal.generation || 0) === genNumber);
+    }
+    setFilteredFractals(filtered);
+  }, [fractals, selectedGeneration]);
+
+  // Get available generations for filter dropdown
+  const availableGenerations = useMemo(() => {
+    const generations = new Set<number>();
+    fractals.forEach(fractal => {
+      generations.add(fractal.generation || 0);
+    });
+    return Array.from(generations).sort((a, b) => a - b);
+  }, [fractals]);
 
   const handleLoadMore = () => {
     if (!loadingMore && hasMore) {
@@ -149,13 +174,33 @@ const Gallery: React.FC = () => {
         {fractals.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-xl">
-                Fractal Collection ({fractals.length} fractal{fractals.length !== 1 ? 's' : ''})
-              </CardTitle>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <CardTitle className="text-xl">
+                  Fractal Collection ({filteredFractals.length} of {fractals.length} fractal{fractals.length !== 1 ? 's' : ''})
+                </CardTitle>
+                
+                {/* Generation Filter */}
+                <div className="flex items-center gap-2">
+                  <Filter className="w-4 h-4 text-muted-foreground" />
+                  <Select value={selectedGeneration} onValueChange={setSelectedGeneration}>
+                    <SelectTrigger className="w-32">
+                      <SelectValue placeholder="Generation" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Gen</SelectItem>
+                      {availableGenerations.map((gen) => (
+                        <SelectItem key={gen} value={gen.toString()}>
+                          Gen {gen}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
-                {fractals.map((fractal) => (
+                {filteredFractals.map((fractal) => (
                   <Card 
                     key={fractal.id}
                     className="group cursor-pointer transition-all duration-200 hover:shadow-lg hover:scale-105"
@@ -209,6 +254,11 @@ const Gallery: React.FC = () => {
                             <Badge variant="outline" className="text-xs">
                               {fractal.width}×{fractal.height}
                             </Badge>
+                            {fractal.generation !== undefined && (
+                              <Badge variant="default" className="text-xs">
+                                Gen {fractal.generation}
+                              </Badge>
+                            )}
                           </div>
 
                           {/* Stats */}
@@ -229,8 +279,25 @@ const Gallery: React.FC = () => {
                 ))}
               </div>
 
-              {/* Load More Button */}
-              {hasMore && (
+              {/* No filtered results */}
+              {filteredFractals.length === 0 && fractals.length > 0 && (
+                <div className="text-center py-12">
+                  <Filter className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
+                  <h3 className="text-xl font-semibold mb-2">No fractals found</h3>
+                  <p className="text-muted-foreground mb-4">
+                    No fractals match the selected generation filter.
+                  </p>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setSelectedGeneration('all')}
+                  >
+                    Show All Generations
+                  </Button>
+                </div>
+              )}
+
+              {/* Load More Button - only show if we have filtered results */}
+              {hasMore && filteredFractals.length > 0 && (
                 <div className="mt-8 text-center">
                   <Button 
                     onClick={handleLoadMore}
@@ -253,7 +320,7 @@ const Gallery: React.FC = () => {
               )}
 
               {/* End of Results */}
-              {!hasMore && fractals.length > 0 && (
+              {!hasMore && filteredFractals.length > 0 && (
                 <div className="mt-8 text-center">
                   <Separator className="mb-4" />
                   <p className="text-muted-foreground">
