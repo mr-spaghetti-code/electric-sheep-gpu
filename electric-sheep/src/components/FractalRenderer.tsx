@@ -410,13 +410,37 @@ const FractalRenderer: React.FC<FractalRendererProps> = ({
             {fractalData.description && (
               <CardDescription>{fractalData.description}</CardDescription>
             )}
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
               <Badge variant="secondary">{fractalData.colormap}</Badge>
               <span>•</span>
               <span>{fractalData.width}×{fractalData.height}</span>
               <span>•</span>
               <span>{fractalData.view_count} views</span>
+              {fractalData.generation !== undefined && (
+                <>
+                  <span>•</span>
+                  <span>Generation {fractalData.generation}</span>
+                </>
+              )}
             </div>
+            {fractalData.parents && fractalData.parents.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground mt-2">
+                <span>Parents:</span>
+                {fractalData.parents.map((parentId, index) => (
+                  <span key={parentId} className="flex items-center gap-1">
+                    <a 
+                      href={`/gallery/${parentId}`}
+                      className="text-blue-400 hover:text-blue-300 underline underline-offset-2"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Parent {index + 1}
+                    </a>
+                    {index < fractalData.parents!.length - 1 && <span className="ml-1">•</span>}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
           {onClose && (
             <Button
