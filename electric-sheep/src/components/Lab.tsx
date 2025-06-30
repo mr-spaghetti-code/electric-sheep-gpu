@@ -18,6 +18,267 @@ import { useSEO, pageSEO } from '../hooks/useSEO';
 import FractalRenderer from './FractalRenderer';
 import type { FractalConfig, ExtendedFractalTransform } from '@/types/fractal';
 
+// Particle animation component
+interface ParticleAnimationProps {
+  parent1ImageUrl: string;
+  parent2ImageUrl: string;
+  isAnimating: boolean;
+  onAnimationComplete: () => void;
+}
+
+const ParticleAnimation: React.FC<ParticleAnimationProps> = ({
+  parent1ImageUrl,
+  parent2ImageUrl,
+  isAnimating,
+  onAnimationComplete
+}) => {
+  useEffect(() => {
+    if (!isAnimating) return;
+
+    const canvas = document.getElementById('particle-canvas') as HTMLCanvasElement;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return;
+
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    class Particle {
+      x: number;
+      y: number;
+      originX: number;
+      originY: number;
+      targetX: number;
+      targetY: number;
+      size: number;
+      color: string;
+      velocity: { x: number; y: number };
+      life: number;
+      delay: number;
+      opacity: number;
+      angle: number;
+      orbitRadius: number;
+      orbitSpeed: number;
+
+      constructor(x: number, y: number, targetX: number, targetY: number, color: string) {
+        this.x = x;
+        this.y = y;
+        this.originX = x;
+        this.originY = y;
+        this.targetX = targetX;
+        this.targetY = targetY;
+        this.size = Math.random() * 3 + 1;
+        this.color = color;
+        this.velocity = { x: 0, y: 0 };
+        this.life = 1;
+        this.delay = Math.random() * 0.3;
+        this.opacity = 1;
+        this.angle = Math.random() * Math.PI * 2;
+        this.orbitRadius = 0;
+        this.orbitSpeed = (Math.random() - 0.5) * 0.1 + 0.05; // Random spin direction
+      }
+
+      update(progress: number) {
+        if (progress < this.delay) return;
+
+        const adjustedProgress = (progress - this.delay) / (1 - this.delay);
+        
+        // Easing function for smooth motion
+        const easeInOutQuart = (t: number) => {
+          return t < 0.5 ? 8 * t * t * t * t : 1 - Math.pow(-2 * t + 2, 4) / 2;
+        };
+
+        const easedProgress = easeInOutQuart(Math.min(adjustedProgress * 1.2, 1));
+
+        // Phase 1: Move towards center (0 to 0.6)
+        // Phase 2: Swirl in center (0.6 to 1.0)
+        const movePhase = Math.min(easedProgress / 0.6, 1);
+        const swirlPhase = Math.max((easedProgress - 0.6) / 0.4, 0);
+
+        if (movePhase < 1) {
+          // Moving towards center
+          const dx = this.targetX - this.originX;
+          const dy = this.targetY - this.originY;
+          
+          this.x = this.originX + dx * movePhase;
+          this.y = this.originY + dy * movePhase;
+          
+          // Start expanding orbit radius as we approach center
+          this.orbitRadius = movePhase * 30 * (1 - movePhase);
+        } else {
+          // Swirling in center
+          this.angle += this.orbitSpeed;
+          this.orbitRadius = 50 * (1 - swirlPhase) * Math.sin(swirlPhase * Math.PI);
+          
+          this.x = this.targetX + Math.cos(this.angle) * this.orbitRadius;
+          this.y = this.targetY + Math.sin(this.angle) * this.orbitRadius;
+          
+          // Fade out during swirl
+          this.opacity = 1 - swirlPhase;
+        }
+        
+        // Size changes
+        if (easedProgress > 0.5) {
+          this.size *= 0.98;
+        } else {
+          // Grow slightly as approaching center
+          this.size = Math.min(this.size * 1.01, 5);
+        }
+      }
+
+      draw(ctx: CanvasRenderingContext2D) {
+        ctx.globalAlpha = this.opacity;
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Add glow effect
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = this.color;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+    }
+
+    const particles: Particle[] = [];
+    let animationProgress = 0;
+    let animationId: number;
+
+    // Load images and create particles
+    Promise.all([
+      loadImage(parent1ImageUrl),
+      loadImage(parent2ImageUrl)
+    ]).then(([img1, img2]) => {
+      // Get positions of parent slots
+      const parent1Element = document.querySelector('[data-parent="1"]');
+      const parent2Element = document.querySelector('[data-parent="2"]');
+      
+      if (!parent1Element || !parent2Element) return;
+
+      const rect1 = parent1Element.getBoundingClientRect();
+      const rect2 = parent2Element.getBoundingClientRect();
+
+      // Calculate center point between the two parents
+      const centerX = (rect1.left + rect1.width / 2 + rect2.left + rect2.width / 2) / 2;
+      const centerY = (rect1.top + rect1.height / 2 + rect2.top + rect2.height / 2) / 2;
+
+      // Create temporary canvases to sample colors
+      const tempCanvas1 = document.createElement('canvas');
+      const tempCtx1 = tempCanvas1.getContext('2d', { willReadFrequently: true });
+      const tempCanvas2 = document.createElement('canvas');
+      const tempCtx2 = tempCanvas2.getContext('2d', { willReadFrequently: true });
+
+      if (!tempCtx1 || !tempCtx2) return;
+
+      // Set reasonable sampling size
+      const sampleSize = 100;
+      tempCanvas1.width = tempCanvas2.width = sampleSize;
+      tempCanvas1.height = tempCanvas2.height = sampleSize;
+
+      tempCtx1.drawImage(img1, 0, 0, sampleSize, sampleSize);
+      tempCtx2.drawImage(img2, 0, 0, sampleSize, sampleSize);
+
+      const imageData1 = tempCtx1.getImageData(0, 0, sampleSize, sampleSize);
+      const imageData2 = tempCtx2.getImageData(0, 0, sampleSize, sampleSize);
+
+      // Create particles from parent 1 going to center
+      const particleCount = 1600; // Increased from 800
+      for (let i = 0; i < particleCount / 2; i++) {
+        const x = Math.floor(Math.random() * sampleSize);
+        const y = Math.floor(Math.random() * sampleSize);
+        const pixelIndex = (y * sampleSize + x) * 4;
+        
+        const r = imageData1.data[pixelIndex];
+        const g = imageData1.data[pixelIndex + 1];
+        const b = imageData1.data[pixelIndex + 2];
+        const a = imageData1.data[pixelIndex + 3];
+
+        if (a > 0) {
+          const color = `rgba(${r}, ${g}, ${b}, ${a / 255})`;
+          
+          // Map to actual screen coordinates
+          const startX = rect1.left + (x / sampleSize) * rect1.width;
+          const startY = rect1.top + (y / sampleSize) * rect1.height;
+
+          particles.push(new Particle(startX, startY, centerX, centerY, color));
+        }
+      }
+
+      // Create particles from parent 2 going to center
+      for (let i = 0; i < particleCount / 2; i++) {
+        const x = Math.floor(Math.random() * sampleSize);
+        const y = Math.floor(Math.random() * sampleSize);
+        const pixelIndex = (y * sampleSize + x) * 4;
+        
+        const r = imageData2.data[pixelIndex];
+        const g = imageData2.data[pixelIndex + 1];
+        const b = imageData2.data[pixelIndex + 2];
+        const a = imageData2.data[pixelIndex + 3];
+
+        if (a > 0) {
+          const color = `rgba(${r}, ${g}, ${b}, ${a / 255})`;
+          
+          // Map to actual screen coordinates
+          const startX = rect2.left + (x / sampleSize) * rect2.width;
+          const startY = rect2.top + (y / sampleSize) * rect2.height;
+
+          particles.push(new Particle(startX, startY, centerX, centerY, color));
+        }
+      }
+
+      // Animation loop
+      const animate = () => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Update and draw particles
+        particles.forEach(particle => {
+          particle.update(animationProgress);
+          particle.draw(ctx);
+        });
+
+        animationProgress += 0.004; // Slower animation - reduced from 0.008
+
+        if (animationProgress < 1.2) {
+          animationId = requestAnimationFrame(animate);
+        } else {
+          // Animation complete
+          onAnimationComplete();
+        }
+      };
+
+      animate();
+    });
+
+    function loadImage(url: string): Promise<HTMLImageElement> {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = url;
+      });
+    }
+
+    return () => {
+      if (animationId) {
+        cancelAnimationFrame(animationId);
+      }
+    };
+  }, [isAnimating, parent1ImageUrl, parent2ImageUrl, onAnimationComplete]);
+
+  if (!isAnimating) return null;
+
+  return (
+    <canvas
+      id="particle-canvas"
+      className="fixed inset-0 z-50 pointer-events-none"
+      style={{ background: 'transparent' }}
+    />
+  );
+};
+
 // Genetic algorithm parameters
 interface EvolutionParams {
   mutationRate: number;
@@ -47,6 +308,7 @@ const Lab: React.FC = () => {
   const [isAnimating, setIsAnimating] = useState(false);
   const [showParentSelector, setShowParentSelector] = useState<1 | 2 | null>(null);
   const [showParameters, setShowParameters] = useState(false);
+  const [showParticleAnimation, setShowParticleAnimation] = useState(false);
   
   const [evolutionParams, setEvolutionParams] = useState<EvolutionParams>({
     mutationRate: 0.15,
@@ -73,9 +335,11 @@ const Lab: React.FC = () => {
     
     setIsEvolving(true);
     setIsAnimating(true);
-    
-    // Wait for collision animation
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    setShowParticleAnimation(true);
+  };
+
+  const handleAnimationComplete = () => {
+    if (!parent1 || !parent2) return;
     
     // Determine the higher generation
     const maxGeneration = Math.max(parent1.generation || 0, parent2.generation || 0);
@@ -108,6 +372,7 @@ const Lab: React.FC = () => {
     setOffspring(newOffspring);
     setIsAnimating(false);
     setIsEvolving(false);
+    setShowParticleAnimation(false);
     
     // Scroll to the bottom to show the evolved fractal
     setTimeout(() => {
@@ -290,6 +555,16 @@ const Lab: React.FC = () => {
 
   return (
     <div className="container mx-auto px-4 py-8">
+      {/* Particle Animation */}
+      {parent1 && parent2 && parent1.thumbnail_url && parent2.thumbnail_url && (
+        <ParticleAnimation
+          parent1ImageUrl={parent1.thumbnail_url}
+          parent2ImageUrl={parent2.thumbnail_url}
+          isAnimating={showParticleAnimation}
+          onAnimationComplete={handleAnimationComplete}
+        />
+      )}
+
       <div className="space-y-8">
         {/* Header */}
         <Card>
@@ -320,12 +595,11 @@ const Lab: React.FC = () => {
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold text-center">Parent 1</h3>
                 <div 
-                  className={`relative transition-all duration-500 ${
-                    isAnimating ? 'transform translate-x-12 scale-110' : ''
-                  }`}
+                  data-parent="1"
+                  className="relative"
                 >
                   {parent1 ? (
-                    <Card>
+                    <Card className={isAnimating ? 'opacity-50 transition-opacity duration-500' : ''}>
                       <CardContent className="p-4">
                         <div className="relative aspect-square bg-muted rounded-lg mb-3 overflow-hidden max-w-[400px] max-h-[400px] mx-auto">
                           {parent1.thumbnail_url && (
@@ -374,12 +648,11 @@ const Lab: React.FC = () => {
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold text-center">Parent 2</h3>
                 <div 
-                  className={`relative transition-all duration-500 ${
-                    isAnimating ? 'transform -translate-x-12 scale-110' : ''
-                  }`}
+                  data-parent="2"
+                  className="relative"
                 >
                   {parent2 ? (
-                    <Card>
+                    <Card className={isAnimating ? 'opacity-50 transition-opacity duration-500' : ''}>
                       <CardContent className="p-4">
                         <div className="relative aspect-square bg-muted rounded-lg mb-3 overflow-hidden max-w-[400px] max-h-[400px] mx-auto">
                           {parent2.thumbnail_url && (
