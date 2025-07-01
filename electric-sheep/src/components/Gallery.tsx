@@ -32,6 +32,7 @@ const Gallery: React.FC = () => {
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [selectedGeneration, setSelectedGeneration] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<string>('views-desc');
 
   const ITEMS_PER_PAGE = 10;
 
@@ -56,6 +57,14 @@ const Gallery: React.FC = () => {
       // Also increment view count when loading from URL
       try {
         await incrementViewCount(fractal.id);
+        // Update local state to reflect the incremented view count
+        setFractals(prev => 
+          prev.map(f => 
+            f.id === fractal.id 
+              ? { ...f, view_count: f.view_count + 1 }
+              : f
+          )
+        );
       } catch (err) {
         console.warn('Failed to increment view count:', err);
       }
@@ -85,17 +94,38 @@ const Gallery: React.FC = () => {
     }
   };
 
-  // Update filtered fractals when fractals or selected generation changes
+  // Update filtered fractals when fractals, selected generation, or sort order changes
   useEffect(() => {
     let filtered: FractalRecord[];
     if (selectedGeneration === 'all') {
-      filtered = fractals;
+      filtered = [...fractals];
     } else {
       const genNumber = parseInt(selectedGeneration);
       filtered = fractals.filter(fractal => (fractal.generation || 0) === genNumber);
     }
+
+    // Apply sorting
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case 'views-desc':
+          return b.view_count - a.view_count;
+        case 'views-asc':
+          return a.view_count - b.view_count;
+        case 'date-desc':
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        case 'date-asc':
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        case 'title-asc':
+          return a.title.localeCompare(b.title);
+        case 'title-desc':
+          return b.title.localeCompare(a.title);
+        default:
+          return b.view_count - a.view_count;
+      }
+    });
+
     setFilteredFractals(filtered);
-  }, [fractals, selectedGeneration]);
+  }, [fractals, selectedGeneration, sortBy]);
 
   // Get available generations for filter dropdown
   const availableGenerations = useMemo(() => {
@@ -116,21 +146,6 @@ const Gallery: React.FC = () => {
     // Update URL to include fractal ID
     navigate(`/gallery/${fractal.id}`);
     setSelectedFractal(fractal);
-    
-    // Increment view count
-    try {
-      await incrementViewCount(fractal.id);
-      // Update local state to reflect the incremented view count
-      setFractals(prev => 
-        prev.map(f => 
-          f.id === fractal.id 
-            ? { ...f, view_count: f.view_count + 1 }
-            : f
-        )
-      );
-    } catch (err) {
-      console.warn('Failed to increment view count:', err);
-    }
   };
 
   const handleCloseFractal = () => {
@@ -256,22 +271,41 @@ const Gallery: React.FC = () => {
                   Fractal Collection ({filteredFractals.length} of {fractals.length} fractal{fractals.length !== 1 ? 's' : ''})
                 </CardTitle>
                 
-                {/* Generation Filter */}
-                <div className="flex items-center gap-2">
-                  <Filter className="w-4 h-4 text-muted-foreground" />
-                  <Select value={selectedGeneration} onValueChange={setSelectedGeneration}>
-                    <SelectTrigger className="w-32">
-                      <SelectValue placeholder="Generation" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Gen</SelectItem>
-                      {availableGenerations.map((gen) => (
-                        <SelectItem key={gen} value={gen.toString()}>
-                          Gen {gen}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                {/* Generation Filter & Sort */}
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <Filter className="w-4 h-4 text-muted-foreground" />
+                    <Select value={selectedGeneration} onValueChange={setSelectedGeneration}>
+                      <SelectTrigger className="w-32">
+                        <SelectValue placeholder="Generation" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Gen</SelectItem>
+                        {availableGenerations.map((gen) => (
+                          <SelectItem key={gen} value={gen.toString()}>
+                            Gen {gen}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">Sort:</span>
+                    <Select value={sortBy} onValueChange={setSortBy}>
+                      <SelectTrigger className="w-40">
+                        <SelectValue placeholder="Sort by" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="views-desc">Most Views</SelectItem>
+                        <SelectItem value="views-asc">Least Views</SelectItem>
+                        <SelectItem value="date-desc">Newest First</SelectItem>
+                        <SelectItem value="date-asc">Oldest First</SelectItem>
+                        <SelectItem value="title-asc">Title A-Z</SelectItem>
+                        <SelectItem value="title-desc">Title Z-A</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               </div>
             </CardHeader>

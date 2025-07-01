@@ -1,5 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+
+// Debug logging control
+const PRINT_LOGS = false;
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -7,6 +10,7 @@ import { Toggle } from '@/components/ui/toggle';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Hands, type Results, type NormalizedLandmark } from '@mediapipe/hands';
+import { guess } from 'web-audio-beat-detector';
 import {
   Play,
   Pause,
@@ -17,7 +21,10 @@ import {
   Settings,
   Minimize,
   Hand,
-  Download
+  Download,
+  Music,
+  Upload,
+  Volume2
 } from 'lucide-react';
 import type { FractalConfig, ExtendedFractalTransform } from '@/types/fractal';
 import { useSEO, pageSEO } from '../hooks/useSEO';
@@ -43,7 +50,22 @@ interface HandControlState {
   twoHandedPinchCount: number;
   lastTwoHandedPinchTime: number;
   randomizeProgress: number;
-  }
+}
+
+interface AudioState {
+  file: File | null;
+  audioBuffer: AudioBuffer | null;
+  audioContext: AudioContext | null;
+  audioSource: AudioBufferSourceNode | null;
+  analyser: AnalyserNode | null;
+  isPlaying: boolean;
+  isLoading: boolean;
+  bpm: number | null;
+  offset: number | null;
+  beatThreshold: number;
+  lastBeatTime: number;
+  beatSensitivity: number;
+}
 
 // Extend the Window interface to include gtag
 declare global {
@@ -77,6 +99,7 @@ const FullScreenViewer: React.FC = () => {
   const [guiEnabled, setGuiEnabled] = useState(false);
   const [showHandGuide, setShowHandGuide] = useState(true);
   const [timeoutCountdown, setTimeoutCountdown] = useState<number>(0);
+  const [showAudioModal, setShowAudioModal] = useState(false);
   const [handControl, setHandControl] = useState<HandControlState>({
     enabled: false,
     leftXform: null,
@@ -98,14 +121,37 @@ const FullScreenViewer: React.FC = () => {
     randomizeProgress: 0
   });
 
+  const [audioState, setAudioState] = useState<AudioState>({
+    file: null,
+    audioBuffer: null,
+    audioContext: null,
+    audioSource: null,
+    analyser: null,
+    isPlaying: false,
+    isLoading: false,
+    bpm: null,
+    offset: null,
+    beatThreshold: 0.8,
+    lastBeatTime: 0,
+    beatSensitivity: 1.5
+  });
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const handsRef = useRef<Hands | null>(null);
   const handControlRef = useRef(handControl);
+  const audioStateRef = useRef(audioState);
+  const beatAnimationRef = useRef<number | null>(null);
+  const beatCountRef = useRef<number>(0);
 
   // Update ref whenever handControl state changes
   useEffect(() => {
     handControlRef.current = handControl;
   }, [handControl]);
+
+  // Update ref whenever audioState changes
+  useEffect(() => {
+    audioStateRef.current = audioState;
+  }, [audioState]);
 
   // Get viewport dimensions and calculate square canvas size
   const [canvasSize, setCanvasSize] = useState(() => {
@@ -197,6 +243,11 @@ const FullScreenViewer: React.FC = () => {
         setShowControls(prev => !prev);
       } else if (event.key === 'Escape') {
         navigate('/');
+      } else if (event.key === 'Enter') {
+        event.preventDefault();
+        // Trigger beat animation for testing
+        triggerBeatAnimation();
+        if (PRINT_LOGS) console.log('🎵 Manual beat triggered via Enter key');
       }
     };
     
@@ -222,6 +273,12 @@ const FullScreenViewer: React.FC = () => {
         handsRef.current.close();
         handsRef.current = null;
       }
+
+      // Stop audio and beat detection
+      if (audioStateRef.current.audioSource) {
+        audioStateRef.current.audioSource.stop();
+      }
+      stopBeatDetection();
     };
   }, []);
 
@@ -787,6 +844,388 @@ const FullScreenViewer: React.FC = () => {
     }
   }, [isLoading, animationsEnabled, autoRandomize]);
 
+
+
+  // Audio processing and beat detection
+  const loadAudioFile = async (file: File) => {
+    setAudioState(prev => ({ ...prev, isLoading: true }));
+    
+    try {
+      // Create audio context if not exists
+      const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const audioContext = new AudioContextClass();
+      
+      // Read file as array buffer
+      const arrayBuffer = await file.arrayBuffer();
+      
+      // Decode audio data
+      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+      
+      // Analyze beat pattern
+      const { bpm, offset } = await guess(audioBuffer);
+      
+      console.log('Audio analysis complete:', { bpm, offset });
+      
+      setAudioState(prev => ({
+        ...prev,
+        file,
+        audioBuffer,
+        audioContext,
+        bpm,
+        offset,
+        isLoading: false
+      }));
+      
+      // Log Google Analytics event
+      if (window.gtag) {
+        window.gtag('event', 'audio_upload', {
+          event_category: 'audio_visualization',
+          event_label: 'mp3_loaded'
+        });
+      }
+      
+    } catch (error) {
+      console.error('Error loading audio file:', error);
+      setAudioState(prev => ({ ...prev, isLoading: false }));
+    }
+  };
+
+  const playAudio = () => {
+    if (PRINT_LOGS) console.log('🎵 Starting audio playback...');
+    
+    if (!audioStateRef.current.audioBuffer || !audioStateRef.current.audioContext) {
+      if (PRINT_LOGS) console.log('❌ Missing audio buffer or context');
+      return;
+    }
+    
+    // Stop existing source if playing
+    if (audioStateRef.current.audioSource) {
+      audioStateRef.current.audioSource.stop();
+    }
+    
+    // Create new audio source
+    const source = audioStateRef.current.audioContext.createBufferSource();
+    const analyser = audioStateRef.current.audioContext.createAnalyser();
+    
+    source.buffer = audioStateRef.current.audioBuffer;
+    source.connect(analyser);
+    analyser.connect(audioStateRef.current.audioContext.destination);
+    
+    // Configure analyser for beat detection
+    analyser.fftSize = 512;
+    analyser.smoothingTimeConstant = 0.3;
+    
+    if (PRINT_LOGS) console.log('🎵 Audio nodes created and connected');
+    
+    // Update the ref immediately for beat detection
+    audioStateRef.current = {
+      ...audioStateRef.current,
+      audioSource: source,
+      analyser,
+      isPlaying: true
+    };
+    
+    setAudioState(prev => ({
+      ...prev,
+      audioSource: source,
+      analyser,
+      isPlaying: true
+    }));
+    
+    // Start playback
+    source.start();
+    if (PRINT_LOGS) console.log('🎵 Audio source started');
+    
+    // Start beat detection with the analyser directly
+    startBeatDetection(analyser);
+    
+    // Handle audio end
+    source.onended = () => {
+      if (PRINT_LOGS) console.log('🎵 Audio ended');
+      setAudioState(prev => ({
+        ...prev,
+        audioSource: null,
+        isPlaying: false
+      }));
+      
+      stopBeatDetection();
+    };
+  };
+
+  const pauseAudio = () => {
+    if (PRINT_LOGS) console.log('🎵 Pausing audio...');
+    if (audioStateRef.current.audioSource) {
+      audioStateRef.current.audioSource.stop();
+      
+      // Update ref immediately
+      audioStateRef.current = {
+        ...audioStateRef.current,
+        audioSource: null,
+        isPlaying: false
+      };
+      
+      setAudioState(prev => ({
+        ...prev,
+        audioSource: null,
+        isPlaying: false
+      }));
+      
+      stopBeatDetection();
+    }
+  };
+
+  const startBeatDetection = (analyserNode?: AnalyserNode) => {
+    const analyser = analyserNode || audioStateRef.current.analyser;
+    
+    if (PRINT_LOGS) console.log('🎵 Starting beat detection...', {
+      hasAnalyser: !!analyser,
+      hasAnalyserFromRef: !!audioStateRef.current.analyser,
+      isPlaying: audioStateRef.current.isPlaying,
+      hasAudioBuffer: !!audioStateRef.current.audioBuffer
+    });
+    
+    if (!analyser) {
+      if (PRINT_LOGS) console.log('❌ No analyser available for beat detection');
+      return;
+    }
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+    
+    if (PRINT_LOGS) console.log('🎵 Beat detection setup:', { bufferLength, analyserNode: !!analyser });
+    
+    const detectBeats = () => {
+      if (!audioStateRef.current.isPlaying || !analyser) {
+        if (PRINT_LOGS) console.log('🎵 Beat detection stopped:', { 
+          isPlaying: audioStateRef.current.isPlaying, 
+          hasAnalyser: !!analyser 
+        });
+        return;
+      }
+      
+      analyser.getByteFrequencyData(dataArray);
+      
+      // Focus on bass frequencies (0-50Hz range) - expanded for better detection
+      const bassRange = Math.floor(bufferLength * 0.15); // Increased from 0.1 to 0.15
+      let bassSum = 0;
+      
+      for (let i = 0; i < bassRange; i++) {
+        bassSum += dataArray[i];
+      }
+      
+      const bassAverage = bassSum / bassRange;
+      const normalizedBass = bassAverage / 255;
+      
+
+      
+      // Detect beat if bass exceeds threshold and enough time has passed
+      const currentTime = Date.now();
+      const timeSinceLastBeat = currentTime - audioStateRef.current.lastBeatTime;
+      
+      if (normalizedBass > audioStateRef.current.beatThreshold && timeSinceLastBeat > 150) {
+        if (PRINT_LOGS) console.log('🎵 Beat detected!', {
+          bassLevel: normalizedBass.toFixed(3),
+          sensitivity: audioStateRef.current.beatSensitivity.toFixed(1)
+        });
+        triggerBeatAnimation();
+        setAudioState(prev => ({ ...prev, lastBeatTime: currentTime }));
+      }
+      
+      beatAnimationRef.current = requestAnimationFrame(detectBeats);
+    };
+    
+    if (PRINT_LOGS) console.log('🎵 Starting beat detection loop...');
+    beatAnimationRef.current = requestAnimationFrame(detectBeats);
+  };
+
+  const stopBeatDetection = () => {
+    if (beatAnimationRef.current) {
+      cancelAnimationFrame(beatAnimationRef.current);
+      beatAnimationRef.current = null;
+    }
+  };
+
+  // Track ongoing beat animations
+  const beatAnimationState = useRef<{
+    animating: boolean;
+    startFrame: number;
+    targetFrame: number;
+    startTime: number;
+    animationId?: number;
+    // For origin movement
+    originTransformIndex?: number;
+    originStartC?: number;
+    originStartF?: number;
+    originTargetC?: number;
+    originTargetF?: number;
+  }>({
+    animating: false,
+    startFrame: 0,
+    targetFrame: 0,
+    startTime: 0
+  });
+
+  const triggerBeatAnimation = () => {
+    if (PRINT_LOGS) console.log('🎵 triggerBeatAnimation called');
+    
+    if (!window.flam3?.fractal || !window.flam3?.config) {
+      if (PRINT_LOGS) console.log('❌ Missing flam3 or fractal/config');
+      return;
+    }
+    
+    // Increment beat counter
+    beatCountRef.current += 1;
+    if (PRINT_LOGS) console.log(`🎵 Beat #${beatCountRef.current}`);
+    
+    // Find animated and non-animated transforms
+    const animatedTransforms: number[] = [];
+    const nonAnimatedTransforms: number[] = [];
+    
+    for (let i = 0; i < window.flam3.fractal.length; i++) {
+      const xform = window.flam3.fractal[i] as ExtendedFractalTransform;
+      if (xform.animateX || xform.animateY) {
+        animatedTransforms.push(i);
+      } else {
+        nonAnimatedTransforms.push(i);
+      }
+    }
+    
+    // Cancel any ongoing animation
+    if (beatAnimationState.current.animationId) {
+      cancelAnimationFrame(beatAnimationState.current.animationId);
+    }
+    
+    // Set up base animation state
+    beatAnimationState.current = {
+      animating: true,
+      startFrame: 0,
+      targetFrame: 0,
+      startTime: performance.now(),
+      animationId: undefined
+    };
+    
+    // Handle rotation for animated transforms (every beat)
+    let framesToAdvance = 0;
+    if (animatedTransforms.length > 0) {
+      // The animation system calculates rotation as: angle = originalAngle + (frame * baseSpeed * animationSpeed)
+      const desiredRotationDegrees = 15 * audioStateRef.current.beatSensitivity;
+      const desiredRotationRadians = desiredRotationDegrees * Math.PI / 180;
+      
+      // Base animation speed is 0.02 radians per frame (from main.js)
+      const baseAnimationSpeed = 0.02;
+      const currentAnimationSpeed = window.flam3.config.animationSpeed;
+      
+      // Calculate how many frames to advance to achieve the desired rotation
+      framesToAdvance = Math.floor(desiredRotationRadians / (baseAnimationSpeed * currentAnimationSpeed));
+      
+      // Access the actual WebGPU config buffer which has the frame property
+      const configObj = window.flam3.config as FractalConfig & { frame?: number };
+      const currentFrame = configObj.frame || 0;
+      
+      beatAnimationState.current.startFrame = currentFrame;
+      beatAnimationState.current.targetFrame = currentFrame + framesToAdvance;
+      
+      if (PRINT_LOGS) {
+        console.log(`🔄 Rotation for ${animatedTransforms.length} animated transforms:`);
+        console.log(`   Rotation: ${desiredRotationDegrees.toFixed(1)}°`);
+        console.log(`   Frames: ${currentFrame} → ${currentFrame + framesToAdvance}`);
+      }
+    }
+    
+    // Handle origin movement for one non-animated transform (every 4th beat only)
+    const isEvery4thBeat = beatCountRef.current % 4 === 0;
+    if (nonAnimatedTransforms.length > 0 && isEvery4thBeat) {
+      // Pick a random non-animated transform
+      const randomIndex = nonAnimatedTransforms[Math.floor(Math.random() * nonAnimatedTransforms.length)];
+      const xform = window.flam3.fractal[randomIndex] as ExtendedFractalTransform;
+      
+      // Generate random target position within reasonable bounds
+      const moveScale = 0.5 * audioStateRef.current.beatSensitivity; // Scale movement by sensitivity
+      const targetC = xform.c + (Math.random() - 0.5) * moveScale;
+      const targetF = xform.f + (Math.random() - 0.5) * moveScale;
+      
+      // Store origin animation data
+      beatAnimationState.current.originTransformIndex = randomIndex;
+      beatAnimationState.current.originStartC = xform.c;
+      beatAnimationState.current.originStartF = xform.f;
+      beatAnimationState.current.originTargetC = targetC;
+      beatAnimationState.current.originTargetF = targetF;
+      
+      if (PRINT_LOGS) {
+        console.log(`🎯 Origin movement for transform ${randomIndex} (${xform.variation}) - 4th Beat!:`);
+        console.log(`   From: (${xform.c.toFixed(3)}, ${xform.f.toFixed(3)})`);
+        console.log(`   To: (${targetC.toFixed(3)}, ${targetF.toFixed(3)})`);
+      }
+    } else if (nonAnimatedTransforms.length > 0) {
+      if (PRINT_LOGS) console.log(`⏭️ Skipping origin movement (beat ${beatCountRef.current % 4 + 1}/4)`);
+    }
+    
+    // If we have nothing to animate, exit
+    if (animatedTransforms.length === 0 && (!isEvery4thBeat || nonAnimatedTransforms.length === 0)) {
+      if (PRINT_LOGS) console.log('❌ No transforms to animate on this beat');
+      return;
+    }
+    
+    // Easing function (ease-out cubic)
+    const easeOutCubic = (t: number): number => {
+      return 1 - Math.pow(1 - t, 3);
+    };
+    
+    // Animation duration in milliseconds
+    const animationDuration = 300; // 300ms for smooth animation
+    
+    // Animation loop
+    const animate = () => {
+      if (!beatAnimationState.current.animating || !window.flam3?.config || !window.flam3?.fractal) return;
+      
+      const now = performance.now();
+      const elapsed = now - beatAnimationState.current.startTime;
+      const progress = Math.min(elapsed / animationDuration, 1);
+      
+      // Apply easing
+      const easedProgress = easeOutCubic(progress);
+      
+      // Update frame counter for rotation animations
+      if (animatedTransforms.length > 0 && framesToAdvance > 0) {
+        const frameRange = beatAnimationState.current.targetFrame - beatAnimationState.current.startFrame;
+        const currentAnimFrame = beatAnimationState.current.startFrame + Math.floor(frameRange * easedProgress);
+        
+        const config = window.flam3.config as FractalConfig & { frame?: number };
+        config.frame = currentAnimFrame;
+      }
+      
+      // Update origin position for non-animated transform
+      if (beatAnimationState.current.originTransformIndex !== undefined) {
+        const xform = window.flam3.fractal[beatAnimationState.current.originTransformIndex] as ExtendedFractalTransform;
+        
+        // Interpolate position
+        const startC = beatAnimationState.current.originStartC || 0;
+        const startF = beatAnimationState.current.originStartF || 0;
+        const targetC = beatAnimationState.current.originTargetC || 0;
+        const targetF = beatAnimationState.current.originTargetF || 0;
+        
+        xform.c = startC + (targetC - startC) * easedProgress;
+        xform.f = startF + (targetF - startF) * easedProgress;
+      }
+      
+      // Update display
+      if (window.flam3.updateParams) {
+        window.flam3.updateParams();
+      }
+      
+      // Continue animation if not complete
+      if (progress < 1) {
+        beatAnimationState.current.animationId = requestAnimationFrame(animate);
+      } else {
+        // Animation complete
+        beatAnimationState.current.animating = false;
+        if (PRINT_LOGS) console.log('🎵 Beat animation complete');
+      }
+    };
+    
+    // Start animation
+    beatAnimationState.current.animationId = requestAnimationFrame(animate);
+  };
+
   // Reset pinch counter after timeout with countdown
   useEffect(() => {
     if (handControl.randomizeProgress >= 2/3 && handControl.randomizeProgress < 1) {
@@ -1245,9 +1684,54 @@ const FullScreenViewer: React.FC = () => {
         </div>
       )}
 
-      {/* Hand Control toggle button - prominent circular button */}
+      {/* Audio Control and Hand Control buttons */}
       {!isLoading && (
-        <div className="absolute bottom-8 right-8 z-50">
+        <div className="absolute bottom-8 right-8 z-50 flex flex-col gap-4">
+          {/* Audio Control button */}
+          <div className="relative group">
+            <Button 
+              onClick={() => setShowAudioModal(true)}
+              variant={audioState.isPlaying ? "default" : "outline"}
+              size="lg"
+              className={`
+                relative w-16 h-16 rounded-full p-0 transition-all duration-300
+                ${audioState.isPlaying 
+                  ? 'bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 border-0 shadow-lg shadow-green-500/25' 
+                  : 'bg-black/50 border-white/20 hover:bg-black/70 hover:border-white/40'
+                }
+              `}
+              title="Audio visualization"
+            >
+              {audioState.isPlaying ? (
+                <Volume2 className="w-8 h-8 text-white animate-pulse" />
+              ) : (
+                <Music className="w-8 h-8 text-white/90" />
+              )}
+            </Button>
+            
+            {/* Audio status indicator */}
+            {audioState.file && (
+              <div className="absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap">
+                <span className="text-xs text-white/70 bg-black/50 px-2 py-1 rounded">
+                  {audioState.isPlaying ? '🎵 Audio Active' : '🎵 Ready'}
+                </span>
+              </div>
+            )}
+            
+            {/* Hover tooltip */}
+            {!audioState.file && (
+              <div className="absolute right-full mr-4 top-1/2 -translate-y-1/2 opacity-0 hover:opacity-100 transition-opacity duration-300 pointer-events-none group-hover:opacity-100">
+                <div className="bg-black/90 text-white text-xs px-3 py-2 rounded-lg whitespace-nowrap">
+                  <p className="font-semibold mb-1">🎵 Audio Visualization</p>
+                  <p>Sync fractals with music beats!</p>
+                  <p className="text-white/70 mt-1">Click to upload MP3</p>
+                </div>
+                <div className="absolute left-full top-1/2 -translate-y-1/2 w-0 h-0 border-t-[6px] border-t-transparent border-b-[6px] border-b-transparent border-l-[6px] border-l-black/90" />
+              </div>
+            )}
+          </div>
+
+          {/* Hand Control toggle button */}
           <div className="relative group">
             {/* Pulsing ring animation when not active */}
             {!handControl.enabled && (
@@ -1434,6 +1918,7 @@ const FullScreenViewer: React.FC = () => {
               <div className="text-xs text-white/70 space-y-1">
                 <p><kbd className="px-1 py-0.5 bg-white/20 rounded">SPACE</kbd> Toggle controls</p>
                 <p><kbd className="px-1 py-0.5 bg-white/20 rounded">ESC</kbd> Exit full screen</p>
+                <p><kbd className="px-1 py-0.5 bg-white/20 rounded">ENTER</kbd> Manual beat (testing)</p>
                 <p>Scroll to zoom • Drag to pan</p>
                 {guiEnabled && <p className="text-blue-400">Interactive GUI: Drag transform rings/lines</p>}
                 {autoRandomize && <p className="text-yellow-400">Auto-randomizing every ~20s</p>}
@@ -1462,8 +1947,186 @@ const FullScreenViewer: React.FC = () => {
           </Card>
         </div>
       )}
+
+      {/* Audio Modal */}
+      {showAudioModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <Card className="bg-black/90 border-white/20 text-white max-w-md w-full">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <Music className="w-5 h-5" />
+                  Audio Visualization
+                </CardTitle>
+                <Button
+                  onClick={() => setShowAudioModal(false)}
+                  variant="ghost"
+                  size="sm"
+                  className="text-white hover:bg-white/20"
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {!audioState.file ? (
+                <>
+                  {/* File Upload */}
+                  <div className="border-2 border-dashed border-white/20 rounded-lg p-6 text-center">
+                    <Upload className="w-12 h-12 mx-auto mb-4 text-white/50" />
+                    <p className="text-lg mb-2">Upload MP3 File</p>
+                    <p className="text-sm text-white/70 mb-4">
+                      Choose an MP3 file to sync fractal animations with music beats
+                    </p>
+                    <input
+                      type="file"
+                      accept="audio/mp3,audio/mpeg"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          loadAudioFile(file);
+                        }
+                      }}
+                      className="hidden"
+                      id="audio-upload"
+                    />
+                    <Button
+                      onClick={() => document.getElementById('audio-upload')?.click()}
+                      variant="outline"
+                      className="bg-black/50 border-white/20 text-white hover:bg-black/70"
+                      disabled={audioState.isLoading}
+                    >
+                      {audioState.isLoading ? (
+                        <>
+                          <Sparkles className="w-4 h-4 mr-2 animate-spin" />
+                          Analyzing...
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="w-4 h-4 mr-2" />
+                          Choose File
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                  
+                  {/* How it works */}
+                  <div className="text-xs text-white/70 space-y-2">
+                    <h4 className="text-white font-medium">How it works:</h4>
+                    <ul className="space-y-1 pl-2">
+                      <li>• Upload an MP3 file to analyze beats</li>
+                      <li>• Animated transforms rotate on beat</li>
+                      <li>• Static transforms move position on beat</li>
+                      <li>• Adjust sensitivity to control effect intensity</li>
+                      <li>• Works best with electronic/dance music</li>
+                    </ul>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Audio Controls */}
+                  <div className="space-y-4">
+                    <div className="bg-white/10 rounded-lg p-4">
+                      <h3 className="font-medium mb-2">🎵 {audioState.file.name}</h3>
+                      {audioState.bpm && (
+                        <p className="text-sm text-white/70">
+                          Detected BPM: {Math.round(audioState.bpm)}
+                        </p>
+                      )}
+                    </div>
+                    
+                    {/* Play/Pause Controls */}
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={audioState.isPlaying ? pauseAudio : playAudio}
+                        variant="outline"
+                        className="flex-1 bg-black/50 border-white/20 text-white hover:bg-black/70"
+                      >
+                        {audioState.isPlaying ? (
+                          <>
+                            <Pause className="w-4 h-4 mr-2" />
+                            Pause
+                          </>
+                        ) : (
+                          <>
+                            <Play className="w-4 h-4 mr-2" />
+                            Play
+                          </>
+                        )}
+                      </Button>
+                      
+                      <Button
+                        onClick={() => {
+                          pauseAudio();
+                          setAudioState(prev => ({
+                            ...prev,
+                            file: null,
+                            audioBuffer: null,
+                            bpm: null,
+                            offset: null
+                          }));
+                        }}
+                        variant="outline"
+                        size="sm"
+                        className="bg-black/50 border-white/20 text-white hover:bg-black/70"
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                    
+                    {/* Beat Sensitivity */}
+                    <div className="space-y-2">
+                      <Label className="text-sm">Beat Sensitivity</Label>
+                      <input
+                        type="range"
+                        min="0.5"
+                        max="3"
+                        step="0.1"
+                        value={audioState.beatSensitivity}
+                        onChange={(e) => 
+                          setAudioState(prev => ({
+                            ...prev,
+                            beatSensitivity: parseFloat(e.target.value)
+                          }))
+                        }
+                        className="w-full"
+                      />
+                      <div className="flex justify-between text-xs text-white/50">
+                        <span>Subtle</span>
+                        <span>Intense</span>
+                      </div>
+                    </div>
+
+                    {/* Status */}
+                    {audioState.isPlaying && (
+                      <div className="text-center p-3 bg-green-900/30 border border-green-500/20 rounded-lg">
+                        <Volume2 className="w-6 h-6 mx-auto mb-2 text-green-400 animate-pulse" />
+                        <p className="text-sm text-green-400">
+                          🎵 Audio visualization active
+                        </p>
+                        <p className="text-xs text-white/70 mt-1">
+                          Transforms pulse & move with beats!
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Instructions */}
+                  <div className="text-xs text-white/70 space-y-1 border-t border-white/20 pt-3">
+                    <p className="text-white font-medium">💡 Tips:</p>
+                    <p>• Animated transforms: rotation pulses on beat</p>
+                    <p>• Static transforms: origin moves to random position</p>
+                    <p>• Adjust sensitivity for stronger/weaker effects</p>
+                    <p>• Electronic music with clear bass works best</p>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 };
 
-export default FullScreenViewer; 
+export default FullScreenViewer;
