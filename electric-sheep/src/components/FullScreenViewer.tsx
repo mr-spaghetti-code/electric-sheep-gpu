@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
 // Debug logging control
-const PRINT_LOGS = false;
+const PRINT_LOGS = true;
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -51,6 +51,7 @@ interface HandControlState {
   twoHandedPinchCount: number;
   lastTwoHandedPinchTime: number;
   randomizeProgress: number;
+  smoothedThumbMidpoint: { x: number; y: number } | null;
 }
 
 interface AudioState {
@@ -119,7 +120,8 @@ const FullScreenViewer: React.FC = () => {
     lastRandomizeTime: 0,
     twoHandedPinchCount: 0,
     lastTwoHandedPinchTime: 0,
-    randomizeProgress: 0
+    randomizeProgress: 0,
+    smoothedThumbMidpoint: null
   });
 
   const [audioState, setAudioState] = useState<AudioState>({
@@ -240,6 +242,9 @@ const FullScreenViewer: React.FC = () => {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === ' ' || event.key === 'Spacebar') {
+        event.preventDefault();
+        handleRandomize();
+      } else if (event.key === 'c' || event.key === 'C') {
         event.preventDefault();
         setShowControls(prev => !prev);
       } else if (event.key === 'Escape') {
@@ -564,6 +569,21 @@ const FullScreenViewer: React.FC = () => {
         x: (leftThumb.x + rightThumb.x) / 2,
         y: (leftThumb.y + rightThumb.y) / 2
       };
+      
+      // Apply exponential smoothing to reduce jitter
+      // Smoothing factor optimized for balance between responsiveness and smoothness
+      // This is a simple and performant approach that doesn't require storing multiple frames
+      const smoothingFactor = 0.3; // 0.3 provides good balance (tested range: 0.1-0.5)
+      let smoothedMidpoint = thumbMidpoint;
+      
+      if (handControlRef.current.smoothedThumbMidpoint) {
+        // Apply exponential smoothing: new = alpha * current + (1 - alpha) * previous
+        // This is more performant than moving averages as it only requires one previous value
+        smoothedMidpoint = {
+          x: smoothingFactor * thumbMidpoint.x + (1 - smoothingFactor) * handControlRef.current.smoothedThumbMidpoint.x,
+          y: smoothingFactor * thumbMidpoint.y + (1 - smoothingFactor) * handControlRef.current.smoothedThumbMidpoint.y
+        };
+      }
 
       if (!handControlRef.current.leftPinching && !handControlRef.current.rightPinching) {
         // Start two-handed pinching - store initial state
@@ -589,7 +609,8 @@ const FullScreenViewer: React.FC = () => {
               twoHandedPinchCount: 0,
               lastTwoHandedPinchTime: currentTime,
               lastRandomizeTime: currentTime,
-              randomizeProgress: 0
+              randomizeProgress: 0,
+              smoothedThumbMidpoint: smoothedMidpoint
             }));
           } else {
             // Continue counting pinches
@@ -603,7 +624,8 @@ const FullScreenViewer: React.FC = () => {
               originalPan: { x: currentX, y: currentY },
               twoHandedPinchCount: newCount,
               lastTwoHandedPinchTime: currentTime,
-              randomizeProgress: newCount / 3 // Progress towards randomization
+              randomizeProgress: newCount / 3, // Progress towards randomization
+              smoothedThumbMidpoint: smoothedMidpoint
             }));
             // Reset countdown when making progress
             if (newCount === 2) {
@@ -622,11 +644,18 @@ const FullScreenViewer: React.FC = () => {
             originalPan: { x: currentX, y: currentY },
             twoHandedPinchCount: 1,
             lastTwoHandedPinchTime: currentTime,
-            randomizeProgress: 1 / 3
+            randomizeProgress: 1 / 3,
+            smoothedThumbMidpoint: smoothedMidpoint
           }));
         }
       } else if (handControlRef.current.leftPinchStart && handControlRef.current.rightPinchStart && window.flam3?.config) {
         // Continue two-handed pinching
+        
+        // Update smoothed midpoint for next frame
+        setHandControl(prev => ({
+          ...prev,
+          smoothedThumbMidpoint: smoothedMidpoint
+        }));
         
         // Calculate original thumb distance
         const originalThumbDistance = Math.hypot(
@@ -641,15 +670,15 @@ const FullScreenViewer: React.FC = () => {
         // Apply zoom with clamping
         window.flam3.config.zoom = Math.max(0.01, Math.min(50, newZoom));
         
-        // Calculate original midpoint
+        // Calculate original midpoint (use the smoothed initial position if available)
         const originalMidpoint = {
           x: (handControlRef.current.leftPinchStart.x + handControlRef.current.rightPinchStart.x) / 2,
           y: (handControlRef.current.leftPinchStart.y + handControlRef.current.rightPinchStart.y) / 2
         };
         
-        // Calculate pan based on midpoint movement
-        const deltaX = (thumbMidpoint.x - originalMidpoint.x) * 4; // Increased sensitivity
-        const deltaY = (thumbMidpoint.y - originalMidpoint.y) * 4;
+        // Calculate pan based on smoothed midpoint movement for jitter-free panning
+        const deltaX = (smoothedMidpoint.x - originalMidpoint.x) * 4; // Increased sensitivity
+        const deltaY = (smoothedMidpoint.y - originalMidpoint.y) * 4;
         
         // Apply pan offset
         const newX = handControlRef.current.originalPan.x + deltaX / window.flam3.config.zoom;
@@ -666,7 +695,8 @@ const FullScreenViewer: React.FC = () => {
         leftPinching: false,
         rightPinching: false,
         leftPinchStart: null,
-        rightPinchStart: null
+        rightPinchStart: null,
+        smoothedThumbMidpoint: null // Reset smoothed position
       }));
     } else {
       // Neither hand is pinching - check if we should reset the count
@@ -676,7 +706,8 @@ const FullScreenViewer: React.FC = () => {
         setHandControl(prev => ({
           ...prev,
           twoHandedPinchCount: 0,
-          randomizeProgress: 0
+          randomizeProgress: 0,
+          smoothedThumbMidpoint: null
         }));
       }
     }
@@ -885,8 +916,74 @@ const FullScreenViewer: React.FC = () => {
         });
       }
       
+      // Automatically start playing the audio after analysis
+      setTimeout(() => {
+        playAudio();
+      }, 100);
+      
     } catch (error) {
       console.error('Error loading audio file:', error);
+      setAudioState(prev => ({ ...prev, isLoading: false }));
+    }
+  };
+
+  const loadDefaultAudio = async () => {
+    setAudioState(prev => ({ ...prev, isLoading: true }));
+    
+    try {
+      // Create audio context if not exists
+      const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const audioContext = new AudioContextClass();
+      
+      // Fetch the default audio file
+      const response = await fetch('/ninze.mp3');
+      if (!response.ok) {
+        throw new Error('Failed to load default audio file');
+      }
+      
+      // Read as array buffer
+      const arrayBuffer = await response.arrayBuffer();
+      
+      // Decode audio data
+      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+      
+      // Analyze beat pattern
+      const { bpm, offset } = await guess(audioBuffer);
+      
+      console.log('Default audio analysis complete:', { bpm, offset });
+      
+      // Create a fake file object for display purposes
+      const defaultFile = {
+        name: 'ninze.mp3 (demo track)',
+        size: arrayBuffer.byteLength,
+        type: 'audio/mpeg'
+      } as File;
+      
+      setAudioState(prev => ({
+        ...prev,
+        file: defaultFile,
+        audioBuffer,
+        audioContext,
+        bpm,
+        offset,
+        isLoading: false
+      }));
+      
+      // Log Google Analytics event
+      if (window.gtag) {
+        window.gtag('event', 'demo_audio_load', {
+          event_category: 'audio_visualization',
+          event_label: 'default_track_loaded'
+        });
+      }
+      
+      // Automatically start playing the audio after analysis
+      setTimeout(() => {
+        playAudio();
+      }, 100);
+      
+    } catch (error) {
+      console.error('Error loading default audio file:', error);
       setAudioState(prev => ({ ...prev, isLoading: false }));
     }
   };
@@ -1132,9 +1229,35 @@ const FullScreenViewer: React.FC = () => {
       }
     }
     
+    // Handle rotation symmetry change (every 16th beat)
+    const isEvery16thBeat = beatCountRef.current % 16 === 0;
+    if (isEvery16thBeat && window.flam3?.config) {
+      // Generate a random rotation symmetry value between 1 and 20
+      // Use a weighted random approach to favor lower symmetry values
+      // Generate a random number and square it to bias toward lower values
+      const randomValue = Math.random();
+      const biasedRandom = randomValue * randomValue; // Square to bias toward 0
+      const newSymmetry = Math.floor(biasedRandom * 20) + 1; // Scale to 1-20 range
+      
+      // Apply rotation symmetry using the same property as FractalViewer
+      window.flam3.config.rotation = newSymmetry;
+      
+      if (PRINT_LOGS) {
+        console.log(`🌟 Rotation symmetry changed to ${newSymmetry}-fold - 16th Beat!`);
+      }
+      
+      // Immediately apply the symmetry change
+      if (window.flam3.updateParams) {
+        window.flam3.updateParams();
+      }
+      if (window.flam3.clear) {
+        window.flam3.clear();
+      }
+    }
+
     // Handle origin movement for one non-animated transform (every 4th beat only)
     const isEvery4thBeat = beatCountRef.current % 4 === 0;
-    if (nonAnimatedTransforms.length > 0 && isEvery4thBeat) {
+    if (nonAnimatedTransforms.length > 0 && isEvery4thBeat && !isEvery16thBeat) {
       // Pick a random non-animated transform
       const randomIndex = nonAnimatedTransforms[Math.floor(Math.random() * nonAnimatedTransforms.length)];
       const xform = window.flam3.fractal[randomIndex] as ExtendedFractalTransform;
@@ -1156,7 +1279,7 @@ const FullScreenViewer: React.FC = () => {
         console.log(`   From: (${xform.c.toFixed(3)}, ${xform.f.toFixed(3)})`);
         console.log(`   To: (${targetC.toFixed(3)}, ${targetF.toFixed(3)})`);
       }
-    } else if (nonAnimatedTransforms.length > 0) {
+    } else if (nonAnimatedTransforms.length > 0 && !isEvery16thBeat) {
       if (PRINT_LOGS) console.log(`⏭️ Skipping origin movement (beat ${beatCountRef.current % 4 + 1}/4)`);
     }
     
@@ -1244,7 +1367,8 @@ const FullScreenViewer: React.FC = () => {
               setHandControl(prevControl => ({
                 ...prevControl,
                 twoHandedPinchCount: 0,
-                randomizeProgress: 0
+                randomizeProgress: 0,
+                smoothedThumbMidpoint: null
               }));
             }
             return 0;
@@ -1415,7 +1539,8 @@ const FullScreenViewer: React.FC = () => {
         lastRandomizeTime: 0,
         twoHandedPinchCount: 0,
         lastTwoHandedPinchTime: 0,
-        randomizeProgress: 0
+        randomizeProgress: 0,
+        smoothedThumbMidpoint: null
       });
     }
   };
@@ -1936,7 +2061,8 @@ const FullScreenViewer: React.FC = () => {
 
               {/* Instructions */}
               <div className="text-xs text-white/70 space-y-1">
-                <p><kbd className="px-1 py-0.5 bg-white/20 rounded">SPACE</kbd> Toggle controls</p>
+                <p><kbd className="px-1 py-0.5 bg-white/20 rounded">SPACE</kbd> Randomize fractal</p>
+                <p><kbd className="px-1 py-0.5 bg-white/20 rounded">C</kbd> Toggle controls</p>
                 <p><kbd className="px-1 py-0.5 bg-white/20 rounded">ESC</kbd> Go to Create</p>
                 <p><kbd className="px-1 py-0.5 bg-white/20 rounded">ENTER</kbd> Manual beat (testing)</p>
                 <p>Scroll to zoom • Drag to pan</p>
@@ -1994,49 +2120,72 @@ const FullScreenViewer: React.FC = () => {
                   {/* File Upload */}
                   <div className="border-2 border-dashed border-white/20 rounded-lg p-6 text-center">
                     <Upload className="w-12 h-12 mx-auto mb-4 text-white/50" />
-                    <p className="text-lg mb-2">Upload MP3 File</p>
+                    <p className="text-lg mb-2">Audio Visualization</p>
                     <p className="text-sm text-white/70 mb-4">
                       Choose an MP3 file to sync fractal animations with music beats
                     </p>
-                    <input
-                      type="file"
-                      accept="audio/mp3,audio/mpeg"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          loadAudioFile(file);
-                        }
-                      }}
-                      className="hidden"
-                      id="audio-upload"
-                    />
-                    <Button
-                      onClick={() => document.getElementById('audio-upload')?.click()}
-                      variant="outline"
-                      className="bg-black/50 border-white/20 text-white hover:bg-black/70"
-                      disabled={audioState.isLoading}
-                    >
-                      {audioState.isLoading ? (
-                        <>
-                          <Sparkles className="w-4 h-4 mr-2 animate-spin" />
-                          Analyzing...
-                        </>
-                      ) : (
-                        <>
-                          <Upload className="w-4 h-4 mr-2" />
-                          Choose File
-                        </>
-                      )}
-                    </Button>
+                    
+                    <div className="flex flex-col gap-3">
+                      {/* Demo Track Button */}
+                      <Button
+                        onClick={loadDefaultAudio}
+                        variant="default"
+                        className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white border-0"
+                        disabled={audioState.isLoading}
+                      >
+                        {audioState.isLoading ? (
+                          <>
+                            <Sparkles className="w-4 h-4 mr-2 animate-spin" />
+                            Analyzing...
+                          </>
+                        ) : (
+                          <>
+                            <Play className="w-4 h-4 mr-2" />
+                            Try Demo Track (ninze.mp3)
+                          </>
+                        )}
+                      </Button>
+                      
+                      {/* Or separator */}
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 h-px bg-white/20" />
+                        <span className="text-xs text-white/50">or</span>
+                        <div className="flex-1 h-px bg-white/20" />
+                      </div>
+                      
+                      {/* Upload Button */}
+                      <input
+                        type="file"
+                        accept="audio/mp3,audio/mpeg"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            loadAudioFile(file);
+                          }
+                        }}
+                        className="hidden"
+                        id="audio-upload"
+                      />
+                      <Button
+                        onClick={() => document.getElementById('audio-upload')?.click()}
+                        variant="outline"
+                        className="bg-black/50 border-white/20 text-white hover:bg-black/70"
+                        disabled={audioState.isLoading}
+                      >
+                        <Upload className="w-4 h-4 mr-2" />
+                        Upload Your Own MP3
+                      </Button>
+                    </div>
                   </div>
                   
                   {/* How it works */}
                   <div className="text-xs text-white/70 space-y-2">
                     <h4 className="text-white font-medium">How it works:</h4>
                     <ul className="space-y-1 pl-2">
-                      <li>• Upload an MP3 file to analyze beats</li>
-                      <li>• Animated transforms rotate on beat</li>
-                      <li>• Static transforms move position on beat</li>
+                      <li>• Try the demo track or upload your own MP3</li>
+                      <li>• Every beat: animated transforms rotate</li>
+                      <li>• 4th beat: static transforms move position</li>
+                      <li>• 16th beat: rotation symmetry changes randomly</li>
                       <li>• Adjust sensitivity to control effect intensity</li>
                       <li>• Works best with electronic/dance music</li>
                     </ul>
@@ -2133,9 +2282,10 @@ const FullScreenViewer: React.FC = () => {
                   
                   {/* Instructions */}
                   <div className="text-xs text-white/70 space-y-1 border-t border-white/20 pt-3">
-                    <p className="text-white font-medium">💡 Tips:</p>
-                    <p>• Animated transforms: rotation pulses on beat</p>
-                    <p>• Static transforms: origin moves to random position</p>
+                    <p className="text-white font-medium">💡 Beat Effects:</p>
+                    <p>• Every beat: animated transforms rotate</p>
+                    <p>• 4th beat: static transforms move position</p>
+                    <p>• 16th beat: rotation symmetry changes randomly</p>
                     <p>• Adjust sensitivity for stronger/weaker effects</p>
                     <p>• Electronic music with clear bass works best</p>
                   </div>

@@ -82,8 +82,8 @@ interface FractalViewerProps {
 }
 
 const FractalViewer: React.FC<FractalViewerProps> = ({ 
-  width = 900, 
-  height = 900
+  width = 1024, 
+  height = 1024
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isLoading, setIsLoading] = useState(true);

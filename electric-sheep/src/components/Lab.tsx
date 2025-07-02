@@ -905,8 +905,8 @@ const Lab: React.FC = () => {
                         config: offspring.config,
                         transforms: offspring.transforms,
                         colormap: offspring.colormap || 'gnuplot',
-                        width: offspring.width || 900,
-                        height: offspring.height || 900,
+                                width: offspring.width || 1024,
+        height: offspring.height || 1024,
                         generation: offspring.generation,
                         parents: offspring.parents,
                         canvas: canvas || undefined // Pass canvas for thumbnail generation

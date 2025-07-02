@@ -15,8 +15,8 @@ CREATE TABLE public.fractals (
   
   -- Visual properties
   colormap TEXT NOT NULL DEFAULT 'gnuplot',
-  width INTEGER NOT NULL DEFAULT 900,
-  height INTEGER NOT NULL DEFAULT 900,
+  width INTEGER NOT NULL DEFAULT 1024,
+  height INTEGER NOT NULL DEFAULT 1024,
   
   -- Generated image data
   thumbnail_url TEXT,

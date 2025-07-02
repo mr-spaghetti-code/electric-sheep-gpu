@@ -1112,7 +1112,7 @@ const init = async (canvas, starts_running = true) => {
     bindGroupLayouts: [fractalBindGroupLayout, guiBindGroupLayout]
   })
 
-  const HISTOGRAM_BUFFER_SIZE = 4 + 3 * 4 + 4 * 4 * 900 * 900
+  const HISTOGRAM_BUFFER_SIZE = 4 + 3 * 4 + 4 * 4 * 1024 * 1024
   const histogramBuffer = device.createBuffer({
     label: 'FLAM3 > Buffer > Histogram',
     size: HISTOGRAM_BUFFER_SIZE,
