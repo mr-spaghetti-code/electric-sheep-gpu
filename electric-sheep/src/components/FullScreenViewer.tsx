@@ -24,7 +24,8 @@ import {
   Download,
   Music,
   Upload,
-  Volume2
+  Volume2,
+  Home
 } from 'lucide-react';
 import type { FractalConfig, ExtendedFractalTransform } from '@/types/fractal';
 import { useSEO, pageSEO } from '../hooks/useSEO';
@@ -229,10 +230,10 @@ const FullScreenViewer: React.FC = () => {
       } catch (err) {
         console.warn('Failed to increment view count:', err);
       }
-    } else {
-      // If fractal not found, redirect to fullscreen
-      navigate('/fullscreen');
-    }
+          } else {
+        // If fractal not found, redirect to home
+        navigate('/');
+      }
   };
 
   // Keyboard shortcuts
@@ -242,7 +243,7 @@ const FullScreenViewer: React.FC = () => {
         event.preventDefault();
         setShowControls(prev => !prev);
       } else if (event.key === 'Escape') {
-        navigate('/');
+        navigate('/create');
       } else if (event.key === 'Enter') {
         event.preventDefault();
         // Trigger beat animation for testing
@@ -1473,7 +1474,7 @@ const FullScreenViewer: React.FC = () => {
       });
       videoRef.current.srcObject = null;
     }
-    navigate('/');
+    navigate('/create');
   };
 
   if (error) {
@@ -1657,8 +1658,8 @@ const FullScreenViewer: React.FC = () => {
               size="sm"
               className="bg-black/50 border-white/20 text-white hover:bg-black/70"
             >
-              <Minimize className="w-4 h-4 mr-2" />
-              Exit Full Screen
+              <Home className="w-4 h-4 mr-2" />
+              Create
             </Button>
             {loadedFractal && (
               <div className="bg-black/50 border border-white/20 text-white px-3 py-1.5 rounded-md text-sm">
@@ -1684,9 +1685,32 @@ const FullScreenViewer: React.FC = () => {
         </div>
       )}
 
-      {/* Audio Control and Hand Control buttons */}
+      {/* Random, Audio Control and Hand Control buttons */}
       {!isLoading && (
         <div className="absolute bottom-8 right-8 z-50 flex flex-col gap-4">
+          {/* Random button */}
+          <div className="relative group">
+            <Button 
+              onClick={handleRandomize}
+              variant="outline"
+              size="lg"
+              className="w-16 h-16 rounded-full p-0 bg-black/50 border-white/20 hover:bg-black/70 hover:border-white/40 transition-all duration-300"
+              title="Generate random fractal"
+            >
+              <Shuffle className="w-8 h-8 text-white/90" />
+            </Button>
+            
+            {/* Hover tooltip */}
+            <div className="absolute right-full mr-4 top-1/2 -translate-y-1/2 opacity-0 hover:opacity-100 transition-opacity duration-300 pointer-events-none group-hover:opacity-100">
+              <div className="bg-black/90 text-white text-xs px-3 py-2 rounded-lg whitespace-nowrap">
+                <p className="font-semibold mb-1">🎲 Randomize</p>
+                <p>Generate a new random fractal</p>
+                <p className="text-white/70 mt-1">Click to create new patterns</p>
+              </div>
+              <div className="absolute left-full top-1/2 -translate-y-1/2 w-0 h-0 border-t-[6px] border-t-transparent border-b-[6px] border-b-transparent border-l-[6px] border-l-black/90" />
+            </div>
+          </div>
+
           {/* Audio Control button */}
           <div className="relative group">
             <Button 
@@ -1834,15 +1858,11 @@ const FullScreenViewer: React.FC = () => {
                   <Toggle 
                     pressed={isRunning} 
                     onPressedChange={(pressed) => pressed ? handleStart() : handleStop()}
-                    className="flex-1"
+                    className="w-full"
                   >
                     {isRunning ? <Pause className="w-4 h-4 mr-2" /> : <Play className="w-4 h-4 mr-2" />}
                     {isRunning ? 'Pause' : 'Play'}
                   </Toggle>
-                  <Button onClick={handleRandomize} variant="outline" size="sm">
-                    <Shuffle className="w-4 h-4 mr-1" />
-                    Random
-                  </Button>
                 </div>
 
                 <Button onClick={handleDownloadPNG} variant="outline" className="w-full">
@@ -1917,7 +1937,7 @@ const FullScreenViewer: React.FC = () => {
               {/* Instructions */}
               <div className="text-xs text-white/70 space-y-1">
                 <p><kbd className="px-1 py-0.5 bg-white/20 rounded">SPACE</kbd> Toggle controls</p>
-                <p><kbd className="px-1 py-0.5 bg-white/20 rounded">ESC</kbd> Exit full screen</p>
+                <p><kbd className="px-1 py-0.5 bg-white/20 rounded">ESC</kbd> Go to Create</p>
                 <p><kbd className="px-1 py-0.5 bg-white/20 rounded">ENTER</kbd> Manual beat (testing)</p>
                 <p>Scroll to zoom • Drag to pan</p>
                 {guiEnabled && <p className="text-blue-400">Interactive GUI: Drag transform rings/lines</p>}

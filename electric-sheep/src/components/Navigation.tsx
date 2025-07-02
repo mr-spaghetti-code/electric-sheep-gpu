@@ -20,19 +20,19 @@ const Navigation: React.FC = () => {
             size="sm"
           >
             <Link to="/" className="flex items-center gap-2">
-              <Home className="w-4 h-4" />
-              Home
+              <Maximize className="w-4 h-4" />
+              Full Screen
             </Link>
           </Button>
           
           <Button
             asChild
-            variant={location.pathname === '/fullscreen' ? 'default' : 'ghost'}
+            variant={location.pathname === '/create' ? 'default' : 'ghost'}
             size="sm"
           >
-            <Link to="/fullscreen" className="flex items-center gap-2">
-              <Maximize className="w-4 h-4" />
-              Full Screen
+            <Link to="/create" className="flex items-center gap-2">
+              <Home className="w-4 h-4" />
+              Create
             </Link>
           </Button>
           

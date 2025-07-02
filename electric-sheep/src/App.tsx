@@ -23,9 +23,9 @@ function App() {
       <div className="App min-h-screen bg-background">
         <Navigation />
         <Routes>
-          <Route path="/" element={<FractalViewer />} />
-          <Route path="/fullscreen" element={<FullScreenViewer />} />
-          <Route path="/fullscreen/:fractalId" element={<FullScreenViewer />} />
+          <Route path="/" element={<FullScreenViewer />} />
+          <Route path="/:fractalId" element={<FullScreenViewer />} />
+          <Route path="/create" element={<FractalViewer />} />
           <Route path="/gallery" element={<Gallery />} />
           <Route path="/gallery/:fractalId" element={<Gallery />} />
           <Route path="/lab" element={<Lab />} />
