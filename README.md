@@ -1,8 +1,8 @@
-# Electric Sheep GPU 🔥
+# FractalMachine.xyz 🔥
 
 A high-performance, real-time fractal flame generator powered by WebGPU technology. Create, customize, and share stunning fractal art with hardware-accelerated rendering and an intuitive React interface.
 
-![Electric Sheep GPU Demo](electric-sheep/public/og.png)
+![Fractal Machine](electric-sheep/public/og.png)
 
 ## ✨ Features
 
