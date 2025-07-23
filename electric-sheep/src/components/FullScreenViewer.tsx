@@ -343,6 +343,13 @@ const FullScreenViewer: React.FC = () => {
     
     const loadFractalEngine = async () => {
       try {
+        // Check for WebGPU support first
+        if (!('gpu' in navigator)) {
+          setError('WebGPU is not supported in your browser. Please use Chrome 113+, Edge 113+, or another browser with WebGPU support enabled.');
+          setIsLoading(false);
+          return;
+        }
+        
         // Load the main.js script
         script = document.createElement('script');
         script.type = 'module';
@@ -1607,11 +1614,40 @@ const FullScreenViewer: React.FC = () => {
       <div className="fixed inset-0 bg-background flex items-center justify-center">
         <Card className="max-w-md">
           <CardHeader>
-            <CardTitle className="text-destructive">Error</CardTitle>
+            <CardTitle className="text-destructive flex items-center gap-2">
+              <Settings className="w-5 h-5" />
+              {error.includes('WebGPU') ? 'WebGPU Not Available' : 'Error'}
+            </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
             <p>{error}</p>
-            <Button onClick={handleExitFullScreen} className="mt-4">
+            
+            {error.includes('WebGPU') && (
+              <>
+                <Separator />
+                <div className="space-y-3 text-sm">
+                  <p className="font-semibold">To use FractalMachine.xyz, you need a browser with WebGPU support:</p>
+                  <ul className="space-y-1 list-disc list-inside text-muted-foreground">
+                    <li>Chrome 113 or newer (recommended)</li>
+                    <li>Edge 113 or newer</li>
+                    <li>Chrome Canary with WebGPU enabled</li>
+                    <li>Firefox Nightly with WebGPU flag enabled</li>
+                    <li>Safari Technology Preview (macOS 13.3+)</li>
+                  </ul>
+                  <div className="bg-muted p-3 rounded-md">
+                    <p className="text-xs">
+                      <strong>Note:</strong> WebGPU is a new web standard for GPU computing. 
+                      It provides the performance needed for real-time fractal rendering.
+                    </p>
+                  </div>
+                </div>
+              </>
+            )}
+            
+            <Separator />
+            
+            <Button onClick={handleExitFullScreen} className="w-full">
+              <Home className="w-4 h-4 mr-2" />
               Return to Home
             </Button>
           </CardContent>

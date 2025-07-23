@@ -212,6 +212,13 @@ const FractalRenderer: React.FC<FractalRendererProps> = ({
     
     const loadFractalEngine = async () => {
       try {
+        // Check for WebGPU support first
+        if (!('gpu' in navigator)) {
+          setError('WebGPU is not supported in your browser. Please use Chrome 113+, Edge 113+, or another browser with WebGPU support enabled.');
+          setIsLoading(false);
+          return;
+        }
+        
         // Load the main.js script if not already loaded
         if (!window.fractalModuleLoaded) {
           script = document.createElement('script');

@@ -1011,14 +1011,21 @@ function clamp(v, min, max) {
 const init = async (canvas, starts_running = true) => {
   if (navigator.gpu === undefined) {
     console.error('WebGPU is not supported (or not enabled)')
-    document.getElementById('webgpu-not-supported-error').style = ''
-    return
+    const errorElement = document.getElementById('webgpu-not-supported-error')
+    if (errorElement) {
+      errorElement.style = ''
+    }
+    throw new Error('WebGPU is not supported')
   }
   const format = navigator.gpu.getPreferredCanvasFormat()
   const adapter = await navigator.gpu.requestAdapter()
   if (adapter === null) {
     console.error('No WebGPU device is available')
-    document.getElementById('webgpu-no-device-error').style = ''
+    const errorElement = document.getElementById('webgpu-no-device-error')
+    if (errorElement) {
+      errorElement.style = ''
+    }
+    throw new Error('No WebGPU device is available')
   }
   const device = await adapter.requestDevice()
 
